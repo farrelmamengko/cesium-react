@@ -1,5 +1,7 @@
 .App {
-  text-align: center;
+  width: 100%;
+  height: 100vh;
+  position: relative;
 }
 
 .App-logo {
@@ -35,4 +37,20 @@
   to {
     transform: rotate(360deg);
   }
+}
+
+.cesium-viewer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+.cesium-viewer-cesiumWidgetContainer {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  left: 0;
 }
