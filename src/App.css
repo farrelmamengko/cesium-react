@@ -54,3 +54,319 @@
   top: 0;
   left: 0;
 }
+
+/* Panel kontrol utama */
+.control-panel {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  transition: transform 0.3s ease-in-out;
+  z-index: 1000;
+}
+
+.panel-header {
+  position: relative;
+  text-align: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-toggle-button {
+  background: none;
+  border: none;
+  color: white;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.panel-toggle-button:hover {
+  color: #4CAF50;
+}
+
+.panel-content {
+  padding: 15px;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 20px;
+  align-items: start;
+}
+
+/* Animasi panel */
+.panel-visible {
+  transform: translateY(0);
+}
+
+.panel-hidden {
+  transform: translateY(calc(100% - 40px)); /* Menyisakan ruang untuk tombol toggle */
+}
+
+/* Update style untuk description box */
+.description-box {
+  background-color: rgba(38, 38, 38, 0.9);
+  border-radius: 8px;
+  padding: 15px;
+  margin: 10px 0;
+  color: #ffffff;
+  animation: fadeIn 0.3s ease-in-out; /* Tambah animasi fade in */
+}
+
+/* Tambah animasi fadeIn */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.description-box h3 {
+  color: #4CAF50;
+  margin: 0 0 10px 0;
+  font-size: 1.2em;
+}
+
+.description-content {
+  color: #ffffff;
+}
+
+.description-content p {
+  margin: 5px 0;
+  line-height: 1.4;
+}
+
+.description-content strong {
+  color: #81c784;
+  font-weight: 600;
+  margin-right: 5px;
+}
+
+/* Styling untuk tombol */
+.control-button {
+  padding: 10px 20px;
+  background-color: #2c3e50;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  font-size: 0.9em;
+  letter-spacing: 0.5px;
+}
+
+.control-button:hover {
+  background-color: #34495e;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.control-button.measuring {
+  background-color: #e74c3c;
+}
+
+/* Dropdown container */
+.dropdown-container {
+  position: relative;
+  min-width: 180px;
+}
+
+/* Dropdown menu */
+.dropdown-menu {
+  position: absolute;
+  bottom: 100%;
+  margin-bottom: 8px;
+  background-color: rgba(44, 62, 80, 0.95);
+  border-radius: 8px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  min-width: 300px;
+  max-width: 400px;
+}
+
+/* Dropdown item */
+.dropdown-item {
+  width: 100%;
+  padding: 10px 15px;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.4;
+  font-size: 14px;
+  border: none;
+  background: none;
+  color: white;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.dropdown-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Update styling untuk mini map 2D */
+.mini-map {
+  width: 300px;
+  height: 200px;
+  background-color: rgba(44, 62, 80, 0.4);
+  border-radius: 4px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+  position: relative;
+}
+
+.mini-map .cesium-viewer {
+  width: 100% !important;
+  height: 100% !important;
+  position: absolute !important;
+  top: 0;
+  left: 0;
+}
+
+/* Sembunyikan semua kontrol yang tidak diperlukan di mini map */
+.mini-map .cesium-viewer-toolbar,
+.mini-map .cesium-viewer-timelineContainer,
+.mini-map .cesium-viewer-animationContainer,
+.mini-map .cesium-viewer-fullscreenContainer,
+.mini-map .cesium-viewer-navigationHelpButtonContainer,
+.mini-map .cesium-viewer-selectionIndicator,
+.mini-map .cesium-viewer-infoBox,
+.mini-map .cesium-viewer-bottom,
+.mini-map .cesium-viewer-vrButton,
+.mini-map .cesium-home-button,
+.mini-map .cesium-sceneModePicker-wrapper {
+  display: none !important;
+}
+
+/* Pastikan container mini map memiliki z-index yang tepat */
+.mini-map .cesium-viewer-cesiumWidgetContainer {
+  z-index: 1 !important;
+}
+
+/* Update style untuk tombol navigasi */
+.measurement-nav-button {
+  position: absolute;
+  left: 5px;
+  top: 40px;
+  background-color: rgba(38, 38, 38, 0.75);
+  border: 1px solid #444;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 14%;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.measurement-nav-button:hover {
+  background-color: rgba(58, 58, 58, 0.8);
+  border-color: #666;
+}
+
+.measurement-nav-button.active {
+  background-color: rgba(0, 136, 170, 0.7);
+}
+
+/* Update ukuran dan warna ikon */
+.measurement-nav-button svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+  opacity: 0.8;
+}
+
+.measurement-nav-button:hover svg {
+  opacity: 1;
+}
+
+/* Tambahkan style untuk tombol home baru */
+.home-nav-button {
+  position: absolute;
+  left: 5px;
+  top: 5px;  /* Posisi di atas tombol koordinat */
+  background-color: rgba(38, 38, 38, 0.75);
+  border: 1px solid #444;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 14%;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.home-nav-button:hover {
+  background-color: rgba(58, 58, 58, 0.8);
+  border-color: #666;
+}
+
+/* Update ukuran dan warna ikon home */
+.home-nav-button svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+  opacity: 0.8;
+}
+
+.home-nav-button:hover svg {
+  opacity: 1;
+}
+
+/* Tambahkan style untuk tombol clear */
+.clear-nav-button {
+  position: absolute;
+  left: 5px;
+  top: 75px;  /* Posisi di bawah tombol koordinat */
+  background-color: rgba(38, 38, 38, 0.75);
+  border: 1px solid #444;
+  color: #fff;
+  width: 32px;
+  height: 32px;
+  border-radius: 14%;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+}
+
+.clear-nav-button:hover {
+  background-color: rgba(220, 53, 69, 0.8); /* Warna merah saat hover */
+  border-color: #dc3545;
+}
+
+/* Update ukuran dan warna ikon clear */
+.clear-nav-button svg {
+  width: 24px;
+  height: 24px;
+  fill: #ffffff;
+  opacity: 0.8;
+}
+
+.clear-nav-button:hover svg {
+  opacity: 1;
+}
