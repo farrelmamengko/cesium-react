@@ -61,10 +61,14 @@
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: rgba(0, 0, 0, 0.7);
+  background-color: rgba(0, 0, 0, 0.75);
   backdrop-filter: blur(8px);
   transition: transform 0.3s ease-in-out;
   z-index: 1000;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 .panel-header {
@@ -89,63 +93,140 @@
 }
 
 .panel-content {
-  padding: 15px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 20px;
-  align-items: start;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
 }
 
-/* Animasi panel */
-.panel-visible {
-  transform: translateY(0);
+/* Layout 3 kolom yang ditukar posisinya */
+.panel-three-column-layout {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  gap: 8px;
 }
 
-.panel-hidden {
-  transform: translateY(calc(100% - 40px)); /* Menyisakan ruang untuk tombol toggle */
+/* Sekarang kolom kiri untuk selector */
+.panel-left-column {
+  width: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 10px;
 }
 
-/* Update style untuk description box */
+/* Sekarang kolom tengah untuk deskripsi */
+.panel-center-column {
+  flex: 1;
+  background-color: #37474f;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.panel-right-column {
+  width: 300px;
+  border-radius: 4px;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  background-color: rgba(38, 50, 56, 0.4);
+}
+
+/* Reposisi tombol toggle ke tengah */
+.panel-toggle {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.75);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  z-index: 1001;
+  transition: background-color 0.2s ease;
+}
+
+.panel-toggle:hover {
+  background-color: rgba(0, 0, 0, 0.9);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.panel-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: white;
+}
+
+/* Tambahkan style untuk label pada tombol */
+.toggle-label {
+  margin-left: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  color: white;
+}
+
+/* Styling DescriptionBox yang lebih rapi */
 .description-box {
-  background-color: rgba(38, 38, 38, 0.9);
-  border-radius: 8px;
-  padding: 15px;
-  margin: 10px 0;
-  color: #ffffff;
-  animation: fadeIn 0.3s ease-in-out; /* Tambah animasi fade in */
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  color: white;
 }
 
-/* Tambah animasi fadeIn */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+.description-header {
+  padding: 10px 15px;
+  background-color: #263238;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-.description-box h3 {
-  color: #4CAF50;
-  margin: 0 0 10px 0;
-  font-size: 1.2em;
+.description-header h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  color: #fff;
 }
 
 .description-content {
-  color: #ffffff;
+  display: flex;
+  flex: 1;
+  padding: 10px;
+  gap: 20px;
 }
 
-.description-content p {
-  margin: 5px 0;
-  line-height: 1.4;
+.info-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.description-content strong {
-  color: #81c784;
-  font-weight: 600;
-  margin-right: 5px;
+.info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.info-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.info-value {
+  font-size: 14px;
+  color: white;
 }
 
 /* Styling untuk tombol */
@@ -173,59 +254,85 @@
   background-color: #e74c3c;
 }
 
-/* Dropdown container */
+/* Dropdown styling yang disesuaikan */
 .dropdown-container {
   position: relative;
-  min-width: 180px;
+  z-index: 1002;
+  width: 100%;
 }
 
-/* Dropdown menu */
+.dropdown-toggle {
+  width: 100%;
+  background-color: #37474f;
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 8px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.dropdown-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: white;
+}
+
 .dropdown-menu {
   position: absolute;
-  bottom: 100%;
-  margin-bottom: 8px;
-  background-color: rgba(44, 62, 80, 0.95);
-  border-radius: 8px;
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  min-width: 300px;
-  max-width: 400px;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 5px;
+  background-color: #455a64;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 
-/* Dropdown item */
 .dropdown-item {
   width: 100%;
-  padding: 10px 15px;
-  text-align: left;
-  white-space: normal;
-  line-height: 1.4;
-  font-size: 14px;
-  border: none;
   background: none;
+  border: none;
+  padding: 8px 12px;
+  text-align: left;
   color: white;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  font-size: 13px;
 }
 
 .dropdown-item:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: #546e7a;
+}
+
+.dropdown-item.active {
+  background-color: #37474f;
+  font-weight: 500;
 }
 
 /* Update styling untuk mini map 2D */
 .mini-map {
-  width: 300px;
-  height: 200px;
-  background-color: rgba(44, 62, 80, 0.4);
+  width: 100%;
+  height: 100%;
+  background-color: rgba(38, 50, 56, 0.4);
   border-radius: 4px;
   overflow: hidden;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  flex-shrink: 0;
   position: relative;
+}
+
+.mini-map:before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 16px;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0) 100%);
+  z-index: 2;
+  pointer-events: none;
 }
 
 .mini-map .cesium-viewer {
@@ -301,7 +408,7 @@
 .home-nav-button {
   position: absolute;
   left: 5px;
-  top: 5px;  /* Posisi di atas tombol koordinat */
+  top: 5px;
   background-color: rgba(38, 38, 38, 0.75);
   border: 1px solid #444;
   color: #fff;
@@ -338,7 +445,7 @@
 .clear-nav-button {
   position: absolute;
   left: 5px;
-  top: 75px;  /* Posisi di bawah tombol koordinat */
+  top: 75px;
   background-color: rgba(38, 38, 38, 0.75);
   border: 1px solid #444;
   color: #fff;
@@ -355,7 +462,7 @@
 }
 
 .clear-nav-button:hover {
-  background-color: rgba(220, 53, 69, 0.8); /* Warna merah saat hover */
+  background-color: rgba(220, 53, 69, 0.8);
   border-color: #dc3545;
 }
 
@@ -369,4 +476,139 @@
 
 .clear-nav-button:hover svg {
   opacity: 1;
+}
+
+/* Tambahkan style untuk point markers */
+.cesium-viewer-selectionIndicator {
+  display: none;
+}
+
+.point-marker:hover {
+  cursor: pointer;
+}
+
+/* Styling untuk tombol pengaturan kamera - perbaikan agar lebih terlihat */
+.camera-settings-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  min-width: 40px;
+  height: 40px;
+  background-color: rgba(33, 150, 243, 0.8);
+  border: 2px solid white;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+  padding: 0 10px;
+}
+
+.camera-settings-button:hover {
+  background-color: rgba(33, 150, 243, 1);
+  transform: scale(1.05);
+}
+
+.camera-settings-button svg {
+  width: 24px;
+  height: 24px;
+  fill: white;
+}
+
+.camera-settings-button span {
+  margin-left: 5px;
+  font-weight: bold;
+}
+
+/* Styling untuk panel pengaturan kamera */
+.camera-settings-panel {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 20px;
+  border-radius: 8px;
+  z-index: 2000;
+  width: 300px;
+}
+
+.camera-settings-panel h3 {
+  margin-top: 0;
+  text-align: center;
+}
+
+.settings-group {
+  margin-bottom: 15px;
+}
+
+.settings-group label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.settings-group input {
+  width: 100px;
+  padding: 5px;
+  margin-left: 10px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  color: white;
+  border-radius: 4px;
+}
+
+.settings-buttons {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 20px;
+}
+
+.settings-buttons button {
+  padding: 8px 15px;
+  background-color: #4CAF50;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+
+.settings-buttons button:nth-child(2) {
+  background-color: #f44336;
+}
+
+.settings-buttons button:nth-child(3) {
+  background-color: #2196F3;
+}
+
+/* Animasi panel saat muncul dan sembunyi */
+.panel-visible {
+  transform: translateY(0);
+}
+
+.panel-hidden {
+  transform: translateY(100%);
+}
+
+/* Gaya khusus saat panel tersembunyi */
+.panel-toggle.collapsed {
+  top: 10px; /* Posisi tombol saat panel disembunyikan */
+  background-color: rgba(38, 50, 56, 0.8);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* Animasi panel saat muncul dan sembunyi */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
