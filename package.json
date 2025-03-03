@@ -9,6 +9,10 @@
     "@testing-library/user-event": "^13.5.0",
     "cesium": "^1.115.0",
     "copy-webpack-plugin": "^12.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "mongoose": "^7.8.6",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
@@ -20,7 +24,9 @@
     "start": "craco start",
     "build": "craco build",
     "test": "craco test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "server": "nodemon server.js",
+    "dev": "concurrently \"npm run server\" \"npm run start\""
   },
   "eslintConfig": {
     "extends": [
@@ -43,7 +49,9 @@
   "devDependencies": {
     "assert": "^2.1.0",
     "browserify-zlib": "^0.2.0",
+    "concurrently": "^8.2.1",
     "https-browserify": "^1.0.0",
+    "nodemon": "^3.0.1",
     "stream-browserify": "^3.0.0",
     "stream-http": "^3.2.0",
     "url": "^0.11.4",

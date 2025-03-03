@@ -47,9 +47,9 @@ export const useMeasurement = (viewerRef) => {
 
   const clearMeasurements = () => {
     if (measurementToolRef.current) {
-      measurementToolRef.current.clearMeasurements();
-      setHasCoordinates(false);
+      measurementToolRef.current.clear();
       setMeasurement(null);
+      setHasCoordinates(false);
     }
   };
 

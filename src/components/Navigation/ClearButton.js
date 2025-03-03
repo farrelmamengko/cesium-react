@@ -2,13 +2,13 @@ import React from 'react';
 
 const ClearButton = ({ onClick }) => {
   return (
-    <button
-      className="clear-nav-button"
+    <button 
+      className="navigation-button clear-nav-button"
       onClick={onClick}
       title="Hapus Koordinat"
     >
-      <svg viewBox="0 0 24 24">
-        <path d="M19,4H15.5L14.5,3H9.5L8.5,4H5V6H19M6,19A2,2 0 0,0 8,21H16A2,2 0 0,0 18,19V7H6V19Z" />
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
       </svg>
     </button>
   );

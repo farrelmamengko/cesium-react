@@ -6,6 +6,7 @@ import {
   Cartographic
 } from 'cesium';
 import * as Cesium from 'cesium';
+import { TILESET_1, TILESET_2 } from '../constants/tilesets';
 
 const CesiumViewer = ({ 
   viewerRef,
@@ -17,9 +18,7 @@ const CesiumViewer = ({
   clockViewModel,
   activeTilesetId,
   height1,
-  height2,
-  TILESET_1,
-  TILESET_2
+  height2
 }) => {
   return (
     <Viewer

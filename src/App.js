@@ -18,18 +18,18 @@ import TerrainMeasurement from './utils/TerrainMeasurement';
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import './App.css';
 import * as Cesium from 'cesium';
-import { useCameraSettings } from './hooks/useCameraSettings';
 import { useTilesets } from './hooks/useTilesets';
 import { useMeasurement } from './hooks/useMeasurement';
 import { TILESET_1, TILESET_2 } from './constants/tilesets';
-import CameraSettingsPanel from './components/CameraSettings/CameraSettingsPanel';
 import ControlPanel from './components/ControlPanel';
 import HomeButton from './components/Navigation/HomeButton';
 import MeasurementButton from './components/Navigation/MeasurementButton';
 import ClearButton from './components/Navigation/ClearButton';
-import CameraSettingsButton from './components/CameraSettings/CameraSettingsButton';
+import CameraButton from './components/Navigation/CameraButton';
 import CesiumViewer from './components/CesiumViewer';
 import MiniMap from './components/MiniMap';
+import CameraVisualization from './components/CameraVisualization/CameraVisualization';
+import { saveCameraPosition, getCameraPosition } from './services/api';
 
 // Set token Cesium Ion - Ganti dengan token Anda yang valid
 Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOTI1ZDYyZC1mNWEwLTQ4ZjktYjYyZC1hMDU1ZDA0MmMwZTkiLCJpZCI6MTMwNiwiaWF0IjoxNTI3ODI0OTQwfQ.C8eb-HqnuV5pG4znVWc3rBSMtTmGsxt1wIKusHfboZU';
@@ -46,6 +46,12 @@ function App() {
   const [isPanelVisible, setIsPanelVisible] = useState(true);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   
+  // Tambahkan state untuk visibilitas panel kamera
+  const [showCameraInfo, setShowCameraInfo] = useState(false);
+  
+  // Tambahkan state untuk menyimpan posisi kamera
+  const [outcropCameraPositions, setOutcropCameraPositions] = useState({});
+  
   // Gunakan hooks
   const {
     tilesetUrl,
@@ -58,16 +64,6 @@ function App() {
     height1,
     height2
   } = useTilesets();
-  
-  const {
-    cameraSettings,
-    setCameraSettings,
-    showCameraSettings,
-    setShowCameraSettings,
-    getCurrentCameraSettings,
-    saveCameraSettings,
-    previewCameraSettings
-  } = useCameraSettings();
   
   const {
     isMeasuring,
@@ -287,7 +283,9 @@ function App() {
         const entity = pickedObject.id;
         if (entity && entity.label) {
           const tileset = entity.label.text._value === 'OC 1' ? TILESET_1 : TILESET_2;
-          flyToTileset(tileset, viewer);
+          (async () => {
+            await flyToTileset(tileset, viewer);
+          })();
         }
       }
     }, ScreenSpaceEventType.LEFT_CLICK);
@@ -304,23 +302,23 @@ function App() {
   }, [terrainProvider]);
 
   // Tambahkan fungsi helper untuk navigasi home view
-  const flyToHomeView = (duration = 0) => {
-    if (viewerRef.current?.cesiumElement) {
-      const viewer = viewerRef.current.cesiumElement;
-      viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(
-          120.0,  // Longitude Indonesia
-          -2.0,   // Latitude Indonesia
-          5000000.0  // Ketinggian (meter)
-        ),
-        orientation: {
-          heading: CesiumMath.toRadians(0),
-          pitch: CesiumMath.toRadians(-90),
-          roll: 0
-        },
-        duration: duration
-      });
-    }
+  const flyToHomeView = (duration = 2) => {
+    if (!viewerRef.current?.cesiumElement) return;
+    
+    const viewer = viewerRef.current.cesiumElement;
+    viewer.camera.flyTo({
+      destination: Cartesian3.fromDegrees(
+        120.0,  // Longitude Indonesia
+        -2.0,   // Latitude Indonesia
+        5000000.0  // Ketinggian (meter)
+      ),
+      orientation: {
+        heading: CesiumMath.toRadians(0),
+        pitch: CesiumMath.toRadians(-90),
+        roll: 0
+      },
+      duration: duration
+    });
   };
 
   // Di useEffect untuk inisialisasi
@@ -329,6 +327,29 @@ function App() {
       flyToHomeView(0); // Tanpa animasi saat awal load
     }
   }, [terrainProvider]);
+
+  // Toggle fungsi untuk panel kamera
+  const toggleCameraInfo = () => {
+    setShowCameraInfo(!showCameraInfo);
+  };
+
+  const handleSaveCameraPosition = async (outcropId, cameraPosition) => {
+    try {
+      // Simpan ke state
+      setOutcropCameraPositions(prev => ({
+        ...prev,
+        [outcropId]: cameraPosition
+      }));
+
+      // Simpan ke storage
+      await saveCameraPosition(outcropId, cameraPosition);
+      
+      alert('Posisi kamera berhasil disimpan!');
+    } catch (error) {
+      console.error('Gagal menyimpan posisi kamera:', error);
+      alert('Gagal menyimpan posisi kamera');
+    }
+  };
 
   if (error) {
     return <div>Error: {error}</div>;
@@ -358,11 +379,21 @@ function App() {
               TILESET_2={TILESET_2}
             />
             
+            {viewerRef.current?.cesiumElement && showCameraInfo && (
+              <CameraVisualization 
+                viewer={viewerRef.current.cesiumElement} 
+                isVisible={showCameraInfo}
+                onToggleVisibility={toggleCameraInfo}
+                onSavePosition={handleSaveCameraPosition}
+                outcropId={activeTilesetId}
+              />
+            )}
+            
             <div className="navigation-buttons">
               <HomeButton onClick={() => flyToHomeView(2)} />
               <MeasurementButton isMeasuring={isMeasuring} onClick={toggleMeasurement} />
               {hasCoordinates && <ClearButton onClick={clearMeasurements} />}
-              <CameraSettingsButton onClick={() => setShowCameraSettings(true)} />
+              <CameraButton isVisible={showCameraInfo} onClick={toggleCameraInfo} />
             </div>
           </div>
         </div>
@@ -375,8 +406,8 @@ function App() {
         setIsDropdownOpen={setIsDropdownOpen}
         activeTileset={activeTileset}
         activeTilesetId={activeTilesetId}
-        onTilesetSelect={(tileset) => {
-          flyToTileset(tileset, viewerRef.current?.cesiumElement);
+        onTilesetSelect={async (tileset) => {
+          await flyToTileset(tileset, viewerRef.current?.cesiumElement);
           setIsDropdownOpen(false);
         }}
       >
@@ -388,22 +419,6 @@ function App() {
           tilesetUrl2={tilesetUrl2}
         />
       </ControlPanel>
-
-      <CameraSettingsPanel 
-        showCameraSettings={showCameraSettings}
-        cameraSettings={cameraSettings}
-        setCameraSettings={setCameraSettings}
-        onSave={() => saveCameraSettings(
-          viewerRef.current?.cesiumElement,
-          activeTileset,
-          setActiveTileset
-        )}
-        onCancel={() => setShowCameraSettings(false)}
-        onPreview={() => previewCameraSettings(
-          viewerRef.current?.cesiumElement,
-          activeTileset
-        )}
-      />
     </div>
   );
 }

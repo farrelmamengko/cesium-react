@@ -363,226 +363,87 @@
   z-index: 1 !important;
 }
 
-/* Update style untuk tombol navigasi */
-.measurement-nav-button {
+/* Update styling untuk navigation-buttons */
+.navigation-buttons {
   position: absolute;
-  left: 5px;
-  top: 40px;
-  background-color: rgba(38, 38, 38, 0.75);
-  border: 1px solid #444;
-  color: #fff;
-  width: 32px;
-  height: 32px;
-  border-radius: 14%;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
+  top: 20px;
+  left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  z-index: 1000;
+}
+
+/* Update styling untuk semua tombol navigasi */
+.navigation-button {
+  width: 40px;
+  height: 40px;
+  border: 2px solid white;
+  border-radius: 4px;
+  background-color: rgba(33, 150, 243, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  margin: 0;
 }
 
-.measurement-nav-button:hover {
-  background-color: rgba(58, 58, 58, 0.8);
-  border-color: #666;
-}
-
-.measurement-nav-button.active {
-  background-color: rgba(0, 136, 170, 0.7);
-}
-
-/* Update ukuran dan warna ikon */
-.measurement-nav-button svg {
-  width: 24px;
-  height: 24px;
-  fill: #ffffff;
-  opacity: 0.8;
-}
-
-.measurement-nav-button:hover svg {
-  opacity: 1;
-}
-
-/* Tambahkan style untuk tombol home baru */
+/* Styling untuk tombol home */
 .home-nav-button {
-  position: absolute;
-  left: 5px;
-  top: 5px;
-  background-color: rgba(38, 38, 38, 0.75);
-  border: 1px solid #444;
-  color: #fff;
-  width: 32px;
-  height: 32px;
-  border-radius: 14%;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
+  background-color: rgba(76, 175, 80, 0.8);
 }
 
 .home-nav-button:hover {
-  background-color: rgba(58, 58, 58, 0.8);
-  border-color: #666;
+  background-color: rgba(76, 175, 80, 1);
+  transform: scale(1.05);
 }
 
-/* Update ukuran dan warna ikon home */
-.home-nav-button svg {
-  width: 24px;
-  height: 24px;
-  fill: #ffffff;
-  opacity: 0.8;
+/* Styling untuk tombol measurement */
+.measurement-nav-button {
+  background-color: rgba(255, 152, 0, 0.8);
 }
 
-.home-nav-button:hover svg {
-  opacity: 1;
+.measurement-nav-button:hover {
+  background-color: rgba(255, 152, 0, 1);
+  transform: scale(1.05);
 }
 
-/* Tambahkan style untuk tombol clear */
-.clear-nav-button {
-  position: absolute;
-  left: 5px;
-  top: 75px;
-  background-color: rgba(38, 38, 38, 0.75);
-  border: 1px solid #444;
-  color: #fff;
-  width: 32px;
-  height: 32px;
-  border-radius: 14%;
-  cursor: pointer;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
-}
-
-.clear-nav-button:hover {
-  background-color: rgba(220, 53, 69, 0.8);
-  border-color: #dc3545;
-}
-
-/* Update ukuran dan warna ikon clear */
-.clear-nav-button svg {
-  width: 24px;
-  height: 24px;
-  fill: #ffffff;
-  opacity: 0.8;
-}
-
-.clear-nav-button:hover svg {
-  opacity: 1;
-}
-
-/* Tambahkan style untuk point markers */
-.cesium-viewer-selectionIndicator {
-  display: none;
-}
-
-.point-marker:hover {
-  cursor: pointer;
-}
-
-/* Styling untuk tombol pengaturan kamera - perbaikan agar lebih terlihat */
-.camera-settings-button {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  min-width: 40px;
-  height: 40px;
+/* Styling untuk tombol kamera */
+.camera-nav-button {
   background-color: rgba(33, 150, 243, 0.8);
-  border: 2px solid white;
-  border-radius: 4px;
-  color: white;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-  padding: 0 10px;
 }
 
-.camera-settings-button:hover {
+.camera-nav-button:hover {
   background-color: rgba(33, 150, 243, 1);
   transform: scale(1.05);
 }
 
-.camera-settings-button svg {
+/* Styling untuk ikon di dalam tombol */
+.navigation-button svg {
   width: 24px;
   height: 24px;
   fill: white;
+  opacity: 0.9;
 }
 
-.camera-settings-button span {
-  margin-left: 5px;
-  font-weight: bold;
+.navigation-button:hover svg {
+  opacity: 1;
 }
 
-/* Styling untuk panel pengaturan kamera */
-.camera-settings-panel {
+/* Styling untuk tombol aktif */
+.navigation-button.active {
+  border-color: #bbdefb;
+  background-color: rgba(25, 118, 210, 1);
+}
+
+/* Pastikan panel kamera tidak tumpang tindih dengan tombol navigasi */
+.camera-visualization {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 20px;
-  border-radius: 8px;
-  z-index: 2000;
-  width: 300px;
-}
-
-.camera-settings-panel h3 {
-  margin-top: 0;
-  text-align: center;
-}
-
-.settings-group {
-  margin-bottom: 15px;
-}
-
-.settings-group label {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.settings-group input {
-  width: 100px;
-  padding: 5px;
-  margin-left: 10px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  color: white;
-  border-radius: 4px;
-}
-
-.settings-buttons {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
-}
-
-.settings-buttons button {
-  padding: 8px 15px;
-  background-color: #4CAF50;
-  border: none;
-  border-radius: 4px;
-  color: white;
-  cursor: pointer;
-}
-
-.settings-buttons button:nth-child(2) {
-  background-color: #f44336;
-}
-
-.settings-buttons button:nth-child(3) {
-  background-color: #2196F3;
+  top: 20px;
+  left: 80px;
+  z-index: 999;
 }
 
 /* Animasi panel saat muncul dan sembunyi */
@@ -611,4 +472,39 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Styling untuk tombol navigasi kamera */
+.camera-nav-button {
+  background-color: rgba(33, 150, 243, 0.8);
+  border: 2px solid white;
+  border-radius: 4px;
+  width: 40px;
+  height: 40px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.camera-nav-button:hover {
+  background-color: rgba(33, 150, 243, 1);
+  transform: scale(1.05);
+}
+
+.camera-nav-button.active {
+  background-color: rgba(25, 118, 210, 1);
+  border-color: #bbdefb;
+}
+
+.camera-nav-button svg {
+  width: 22px;
+  height: 22px;
+  fill: white;
+  opacity: 0.9;
+}
+
+.camera-nav-button:hover svg {
+  opacity: 1;
 }
