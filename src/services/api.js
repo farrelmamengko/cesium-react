@@ -1,5 +1,6 @@
-// Service untuk API calls
-const API_URL = '/api';
+import axios from 'axios';
+
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5003';
 
 export const fetchOutcrops = async () => {
   try {
@@ -88,59 +89,78 @@ export const getCameraFromMongoDB = async (outcropId) => {
   }
 };
 
-// Fungsi untuk menyimpan posisi kamera
-export const saveCameraPosition = async (outcropId, cameraPosition) => {
+// Fungsi untuk mendapatkan foto berdasarkan outcropId
+export const getPhotosByOutcropId = async (outcropId) => {
   try {
-    const response = await fetch('http://localhost:5003/api/camera/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        position: {
-          longitude: cameraPosition.longitude,
-          latitude: cameraPosition.latitude,
-          height: cameraPosition.height
-        },
-        orientation: {
-          heading: cameraPosition.heading,
-          pitch: cameraPosition.pitch,
-          roll: cameraPosition.roll || 0
-        },
-        outcropId
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    return await response.json();
+    const response = await axios.get(`${API_URL}/api/photos/outcrop/${outcropId}`);
+    return response.data;
   } catch (error) {
-    console.error('Error saving camera position:', error);
+    console.error('Error fetching photos:', error);
     throw error;
   }
 };
 
-// Fungsi untuk mengambil posisi kamera yang tersimpan
-export const getCameraPosition = async (outcropId) => {
+// Fungsi untuk menambahkan foto baru
+export const addPhoto = async (formData) => {
   try {
-    // Untuk sementara, ambil dari localStorage
-    const savedPositions = JSON.parse(localStorage.getItem('cameraPositions') || '{}');
-    return savedPositions[outcropId];
+    // Log untuk debugging
+    console.log('Mencoba upload foto ke:', `${API_URL}/api/photos`);
     
-    // Jika nanti sudah ada API backend, gunakan kode di bawah ini:
-    /*
-    const response = await fetch(`/api/camera-positions/${outcropId}`);
+    const response = await axios.post(`${API_URL}/api/photos`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
     
-    if (!response.ok) {
-      throw new Error('Gagal mengambil posisi kamera');
-    }
-    
-    return response.json();
-    */
+    console.log('Response upload:', response.data);
+    return response.data;
   } catch (error) {
-    console.error('Error getting camera position:', error);
+    console.error('Error uploading photo:', error);
+    console.error('Error response:', error.response?.data);
+    throw error;
+  }
+};
+
+// Fungsi untuk menghapus foto
+export const deletePhoto = async (photoId) => {
+  try {
+    const response = await axios.delete(`${API_URL}/photos/${photoId}`);
+    return response.data;
+  } catch (error) {
+    console.error('Error deleting photo:', error);
+    throw error;
+  }
+};
+
+// Fungsi untuk mendapatkan data tileset
+export const getTilesets = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/tilesets`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching tilesets:', error);
+    throw error;
+  }
+};
+
+// Fungsi untuk mendapatkan data kamera
+export const getCameraPosition = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/camera`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching camera position:', error);
+    throw error;
+  }
+};
+
+// Fungsi untuk menyimpan posisi kamera
+export const saveCameraPosition = async (cameraData) => {
+  try {
+    const response = await axios.post(`${API_URL}/camera`, cameraData);
+    return response.data;
+  } catch (error) {
+    console.error('Error saving camera position:', error);
     throw error;
   }
 };
@@ -161,4 +181,13 @@ export const getLatestCameraPosition = async () => {
     console.error('Error getting latest camera position:', error);
     throw error;
   }
+};
+
+export default {
+  getPhotosByOutcropId,
+  addPhoto,
+  deletePhoto,
+  getTilesets,
+  getCameraPosition,
+  saveCameraPosition
 }; 

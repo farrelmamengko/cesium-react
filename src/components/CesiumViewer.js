@@ -1,12 +1,15 @@
 import React, { useEffect } from 'react';
-import { Viewer, Cesium3DTileset } from 'resium';
+import { Viewer, Cesium3DTileset, ScreenSpaceEventHandler, ScreenSpaceEvent } from 'resium';
 import { 
   Matrix4,
   Cartesian3,
-  Cartographic
+  Cartographic,
+  Math as CesiumMath,
+  ScreenSpaceEventType
 } from 'cesium';
 import * as Cesium from 'cesium';
 import { TILESET_1, TILESET_2 } from '../constants/tilesets';
+import PhotoPoints from './PhotoPoints';
 
 const CesiumViewer = ({ 
   viewerRef,
@@ -18,8 +21,31 @@ const CesiumViewer = ({
   clockViewModel,
   activeTilesetId,
   height1,
-  height2
+  height2,
+  showPhotoMode,
+  onPhotoClick
 }) => {
+  
+  const handleMapClick = (movement) => {
+    if (!showPhotoMode || !viewerRef.current?.cesiumElement) return;
+    
+    const cesiumViewer = viewerRef.current.cesiumElement;
+    const cartesian = cesiumViewer.scene.pickPosition(movement.position);
+    
+    if (cartesian) {
+      const cartographic = Cartographic.fromCartesian(cartesian);
+      const longitude = CesiumMath.toDegrees(cartographic.longitude);
+      const latitude = CesiumMath.toDegrees(cartographic.latitude);
+      const height = cartographic.height;
+      
+      onPhotoClick({
+        longitude,
+        latitude,
+        height
+      });
+    }
+  };
+  
   return (
     <Viewer
       ref={viewerRef}
@@ -53,7 +79,7 @@ const CesiumViewer = ({
           }}
         />
       )}
-
+      
       {tilesetUrl2 && activeTilesetId === TILESET_2.assetId && (
         <Cesium3DTileset
           ref={tilesetRef2}
@@ -70,6 +96,17 @@ const CesiumViewer = ({
           }}
         />
       )}
+      
+      {/* Tangani klik pada peta untuk mode foto */}
+      <ScreenSpaceEventHandler>
+        <ScreenSpaceEvent
+          action={handleMapClick}
+          type={ScreenSpaceEventType.LEFT_CLICK}
+        />
+      </ScreenSpaceEventHandler>
+      
+      {/* Tampilkan foto yang sudah ada */}
+      <PhotoPoints outcropId={activeTilesetId} viewer={viewerRef.current?.cesiumElement} />
     </Viewer>
   );
 };

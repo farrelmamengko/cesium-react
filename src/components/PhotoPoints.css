@@ -1,0 +1,45 @@
+.cesium-infoBox-photo {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  padding: 5px;
+}
+
+.cesium-infoBox-photo h3 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.cesium-infoBox-photo img {
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  display: block;
+  margin: 0 auto;
+}
+
+.cesium-infoBox-photo p {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #666;
+  text-align: center;
+}
+
+/* Override Cesium's default info box styling */
+.cesium-infoBox {
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cesium-infoBox-title {
+  background-color: #4CAF50;
+  color: white;
+  font-size: 14px;
+  padding: 8px 12px;
+}
+
+.cesium-infoBox-body {
+  padding: 12px;
+  background-color: white;
+} 

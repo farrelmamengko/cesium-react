@@ -26,10 +26,12 @@ import HomeButton from './components/Navigation/HomeButton';
 import MeasurementButton from './components/Navigation/MeasurementButton';
 import ClearButton from './components/Navigation/ClearButton';
 import CameraButton from './components/Navigation/CameraButton';
+import PhotoButton from './components/Navigation/PhotoButton';
 import CesiumViewer from './components/CesiumViewer';
 import MiniMap from './components/MiniMap';
 import CameraVisualization from './components/CameraVisualization/CameraVisualization';
 import { saveCameraPosition, getCameraPosition } from './services/api';
+import AddPhotoForm from './components/AddPhotoForm';
 
 // Set token Cesium Ion - Ganti dengan token Anda yang valid
 Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOTI1ZDYyZC1mNWEwLTQ4ZjktYjYyZC1hMDU1ZDA0MmMwZTkiLCJpZCI6MTMwNiwiaWF0IjoxNTI3ODI0OTQwfQ.C8eb-HqnuV5pG4znVWc3rBSMtTmGsxt1wIKusHfboZU';
@@ -51,6 +53,12 @@ function App() {
   
   // Tambahkan state untuk menyimpan posisi kamera
   const [outcropCameraPositions, setOutcropCameraPositions] = useState({});
+  
+  // Tambahkan state untuk foto mode
+  const [showPhotoMode, setShowPhotoMode] = useState(false);
+  
+  // Tambahkan state untuk menyimpan posisi klik pada peta
+  const [clickPosition, setClickPosition] = useState(null);
   
   // Gunakan hooks
   const {
@@ -351,6 +359,34 @@ function App() {
     }
   };
 
+  const togglePhotoMode = () => {
+    setShowPhotoMode(prev => !prev);
+    
+    // Reset mode pengukuran jika sedang aktif
+    if (isMeasuring) {
+      setIsMeasuring(false);
+    }
+    
+    // Atur cursor
+    if (viewerRef.current?.cesiumElement) {
+      viewerRef.current.cesiumElement.canvas.style.cursor = !showPhotoMode ? 'crosshair' : 'default';
+    }
+  };
+
+  const handlePhotoClick = (position) => {
+    if (!showPhotoMode) return;
+    
+    setClickPosition(position);
+    
+    // Reset cursor ke default
+    if (viewerRef.current?.cesiumElement) {
+      viewerRef.current.cesiumElement.canvas.style.cursor = 'default';
+    }
+    
+    // Nonaktifkan mode foto
+    setShowPhotoMode(false);
+  };
+
   if (error) {
     return <div>Error: {error}</div>;
   }
@@ -377,6 +413,8 @@ function App() {
               height2={height2}
               TILESET_1={TILESET_1}
               TILESET_2={TILESET_2}
+              showPhotoMode={showPhotoMode}
+              onPhotoClick={handlePhotoClick}
             />
             
             {viewerRef.current?.cesiumElement && showCameraInfo && (
@@ -394,6 +432,7 @@ function App() {
               <MeasurementButton isMeasuring={isMeasuring} onClick={toggleMeasurement} />
               {hasCoordinates && <ClearButton onClick={clearMeasurements} />}
               <CameraButton isVisible={showCameraInfo} onClick={toggleCameraInfo} />
+              <PhotoButton isActive={showPhotoMode} onClick={togglePhotoMode} />
             </div>
           </div>
         </div>
@@ -419,6 +458,25 @@ function App() {
           tilesetUrl2={tilesetUrl2}
         />
       </ControlPanel>
+      
+      {clickPosition && (
+        <div className="photo-form-container">
+          <AddPhotoForm
+            position={clickPosition}
+            outcropId={activeTilesetId}
+            onCancel={() => {
+              setClickPosition(null);
+              if (viewerRef.current?.cesiumElement) {
+                viewerRef.current.cesiumElement.canvas.style.cursor = 'default';
+              }
+            }}
+            onPhotoAdded={() => {
+              setClickPosition(null);
+              alert('Foto berhasil ditambahkan!');
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
