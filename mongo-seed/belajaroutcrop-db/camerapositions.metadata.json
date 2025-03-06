@@ -1,0 +1,1 @@
+{"indexes":[{"v":{"$numberInt":"2"},"key":{"_id":{"$numberInt":"1"}},"name":"_id_"}],"uuid":"b77e54c3825f47d8aa21aba3d7b84f10","collectionName":"camerapositions","type":"collection"}

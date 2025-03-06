@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Viewer, Cesium3DTileset } from 'resium';
+import { Viewer, Cesium3DTileset, Entity, CameraFlyTo, ScreenSpaceEventHandler, ScreenSpaceEvent } from 'resium';
 import { 
   Ion, 
   Cartesian3, 
@@ -12,12 +12,16 @@ import {
   LabelStyle,
   VerticalOrigin,
   Cartesian2,
-  ScreenSpaceEventType
+  ScreenSpaceEventType,
+  PinBuilder,
+  Cartographic,
+  ClockViewModel,
+  SceneMode,
+  defined
 } from 'cesium';
 import TerrainMeasurement from './utils/TerrainMeasurement';
 import "cesium/Build/Cesium/Widgets/widgets.css";
 import './App.css';
-import * as Cesium from 'cesium';
 import { useTilesets } from './hooks/useTilesets';
 import { useMeasurement } from './hooks/useMeasurement';
 import { TILESET_1, TILESET_2 } from './constants/tilesets';
@@ -30,7 +34,7 @@ import PhotoButton from './components/Navigation/PhotoButton';
 import CesiumViewer from './components/CesiumViewer';
 import MiniMap from './components/MiniMap';
 import CameraVisualization from './components/CameraVisualization/CameraVisualization';
-import { saveCameraPosition, getCameraPosition } from './services/api';
+import { saveCameraPosition, getCameraPosition, fetchOutcrops } from './services/api';
 import AddPhotoForm from './components/AddPhotoForm';
 
 // Set token Cesium Ion - Ganti dengan token Anda yang valid
@@ -102,7 +106,7 @@ function App() {
 
   const position = Cartesian3.fromDegrees(0, 0, 0); 
 
-  const [clockViewModel] = useState(new Cesium.ClockViewModel());
+  const [clockViewModel] = useState(new ClockViewModel());
   const miniMapRef = useRef(null);
 
   useEffect(() => {
@@ -122,31 +126,31 @@ function App() {
 
   // Ubah useEffect untuk tileset pertama (OC 1)
   useEffect(() => {
-    if (tilesetRef.current && tilesetRef.current.cesiumElement) {
+    if (tilesetRef.current?.cesiumElement) {
       const tileset = tilesetRef.current.cesiumElement;
       const absoluteHeight = height1;
       const boundingSphere = tileset.boundingSphere;
-      const cartographic = Cesium.Cartographic.fromCartesian(boundingSphere.center);
+      const cartographic = Cartographic.fromCartesian(boundingSphere.center);
       const surface = Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, 0.0);
       const absolutePosition = Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, absoluteHeight);
       const translation = Cartesian3.subtract(absolutePosition, surface, new Cartesian3());
       tileset.modelMatrix = Matrix4.fromTranslation(translation);
     }
-  }, [height1]);
+  }, [tilesetRef.current, height1]);
 
   // Ubah useEffect untuk tileset kedua (OC 2)
   useEffect(() => {
-    if (tilesetRef2.current && tilesetRef2.current.cesiumElement) {
+    if (tilesetRef2.current?.cesiumElement) {
       const tileset = tilesetRef2.current.cesiumElement;
       const absoluteHeight = height2;
       const boundingSphere = tileset.boundingSphere;
-      const cartographic = Cesium.Cartographic.fromCartesian(boundingSphere.center);
+      const cartographic = Cartographic.fromCartesian(boundingSphere.center);
       const surface = Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, 0.0);
       const absolutePosition = Cartesian3.fromRadians(cartographic.longitude, cartographic.latitude, absoluteHeight);
       const translation = Cartesian3.subtract(absolutePosition, surface, new Cartesian3());
       tileset.modelMatrix = Matrix4.fromTranslation(translation);
     }
-  }, [height2]);
+  }, [tilesetRef2.current, height2]);
 
   // Update useEffect untuk sinkronisasi kamera
   useEffect(() => {
@@ -154,7 +158,7 @@ function App() {
       const mainViewer = viewerRef.current.cesiumElement;
       const miniViewer = miniMapRef.current.cesiumElement;
       
-      miniViewer.scene.mode = Cesium.SceneMode.SCENE2D;
+      miniViewer.scene.mode = SceneMode.SCENE2D;
       miniViewer.scene.screenSpaceCameraController.enableRotate = false;
       miniViewer.scene.screenSpaceCameraController.enableTranslate = false;
       miniViewer.scene.screenSpaceCameraController.enableZoom = false;
@@ -162,22 +166,24 @@ function App() {
       miniViewer.scene.screenSpaceCameraController.enableLook = false;
 
       const syncMiniMap = () => {
-        const viewCenter = new Cesium.Cartesian2(
-          Math.floor(mainViewer.canvas.clientWidth / 2),
-          Math.floor(mainViewer.canvas.clientHeight / 2)
+        const viewCenter = new Cartesian2(
+          mainViewer.canvas.clientWidth / 2,
+          mainViewer.canvas.clientHeight / 2
         );
 
         const worldPosition = mainViewer.scene.camera.pickEllipsoid(viewCenter);
         
-        if (Cesium.defined(worldPosition)) {
-          const distance = Cesium.Cartesian3.distance(
+        if (defined(worldPosition)) {
+          const distance = Cartesian3.distance(
             worldPosition,
-            mainViewer.scene.camera.positionWC
+            mainViewer.scene.globe.ellipsoid.cartographicToCartesian(
+              mainViewer.camera.positionCartographic
+            )
           );
 
-          miniViewer.scene.camera.lookAt(
+          miniViewer.camera.lookAt(
             worldPosition,
-            new Cesium.Cartesian3(0.0, 0.0, distance * 2)
+            new Cartesian3(0.0, 0.0, distance * 2)
           );
         }
       };
@@ -215,117 +221,210 @@ function App() {
     }
   }, [viewerRef.current]); // Jalankan sekali saat viewer siap
 
-  // Fungsi addPointMarkers yang perbaikan
-  const addPointMarkers = () => {
-    if (!viewerRef.current?.cesiumElement) return;
+  // Pastikan fungsi addPointMarkers dipanggil setelah data outcrops berhasil diambil
+  useEffect(() => {
+    console.log('useEffect untuk loadOutcrops dipanggil');
+    
+    // Gunakan variabel untuk melacak apakah komponen masih terpasang
+    let isMounted = true;
+    
+    const loadOutcrops = async () => {
+      try {
+        console.log('Mencoba mengambil data outcrops...');
+        const outcropsData = await fetchOutcrops();
+        
+        // Periksa apakah komponen masih terpasang sebelum memperbarui state
+        if (!isMounted) {
+          console.log('Komponen tidak lagi terpasang, membatalkan pemrosesan data outcrops');
+          return;
+        }
+        
+        console.log('Data outcrops berhasil diambil:', outcropsData);
+        
+        // Periksa struktur data yang dikembalikan oleh API
+        let outcropsArray = outcropsData;
+        
+        // Jika data dikembalikan dalam format {value: [...], Count: ...}
+        if (outcropsData && outcropsData.value && Array.isArray(outcropsData.value)) {
+          outcropsArray = outcropsData.value;
+          console.log('Menggunakan data outcrops dari properti value:', outcropsArray);
+        }
+        
+        // Tambahkan titik untuk setiap outcrop
+        if (outcropsArray && outcropsArray.length > 0) {
+          console.log('Memanggil addPointMarkers dengan data:', outcropsArray);
+          
+          // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
+          requestAnimationFrame(() => {
+            if (isMounted) {
+              addPointMarkers(outcropsArray);
+            }
+          });
+        } else {
+          console.warn('Tidak ada data outcrops yang ditemukan atau format data tidak sesuai'); 
+        }
+      } catch (error) {
+        console.error('Gagal mengambil data outcrops:', error);
+        
+        // Coba lagi setelah beberapa detik jika terjadi error
+        setTimeout(() => {
+          if (isMounted) {
+            console.log('Mencoba mengambil data outcrops lagi setelah error...');
+            loadOutcrops();
+          }
+        }, 5000);
+      }
+    };
+    
+    loadOutcrops();
+    
+    // Cleanup function untuk mencegah memory leak
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Modifikasi fungsi addPointMarkers untuk menerima data outcrops
+  const addPointMarkers = (outcrops) => {
+    if (!viewerRef.current?.cesiumElement) {
+      console.error('Viewer belum siap');
+      return;
+    }
     
     const viewer = viewerRef.current.cesiumElement;
     
-    // Hapus entitas yang ada terlebih dahulu untuk menghindari duplikasi
+    // Hapus entity yang sudah ada jika perlu
     viewer.entities.removeAll();
-
-    // Tambahkan point marker untuk OC 1
-    viewer.entities.add({
-      name: 'OC 1',
-      position: Cartesian3.fromDegrees(
-        TILESET_1.coordinates.longitude,
-        TILESET_1.coordinates.latitude,
-        TILESET_1.coordinates.height
-      ),
-      point: {
-        pixelSize: 10,
-        color: Color.RED,
-        outlineColor: Color.WHITE,
-        outlineWidth: 2,
-        heightReference: HeightReference.CLAMP_TO_GROUND
-      },
-      label: {
-        text: 'OC 1',
-        font: '14px sans-serif',
-        fillColor: Color.WHITE,
-        outlineColor: Color.BLACK,
-        outlineWidth: 2,
-        style: LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: VerticalOrigin.BOTTOM,
-        pixelOffset: new Cartesian2(0, -10),
-        heightReference: HeightReference.RELATIVE_TO_GROUND,
-        showBackground: true,
-        backgroundColor: Color.fromAlpha(Color.BLACK, 0.7)
-      }
-    });
-
-    // Tambahkan point marker untuk OC 2
-    viewer.entities.add({
-      name: 'OC 2',
-      position: Cartesian3.fromDegrees(
-        TILESET_2.coordinates.longitude,
-        TILESET_2.coordinates.latitude,
-        TILESET_2.coordinates.height
-      ),
-      point: {
-        pixelSize: 10,
-        color: Color.RED,
-        outlineColor: Color.WHITE,
-        outlineWidth: 2,
-        heightReference: HeightReference.CLAMP_TO_GROUND
-      },
-      label: {
-        text: 'OC 2',
-        font: '14px sans-serif',
-        fillColor: Color.WHITE,
-        outlineColor: Color.BLACK,
-        outlineWidth: 2,
-        style: LabelStyle.FILL_AND_OUTLINE,
-        verticalOrigin: VerticalOrigin.BOTTOM,
-        pixelOffset: new Cartesian2(0, -10),
-        heightReference: HeightReference.RELATIVE_TO_GROUND,
-        showBackground: true,
-        backgroundColor: Color.fromAlpha(Color.BLACK, 0.7)
-      }
-    });
-
-    // Event handler untuk klik pada titik
-    viewer.screenSpaceEventHandler.setInputAction((click) => {
-      const pickedObject = viewer.scene.pick(click.position);
-      if (Cesium.defined(pickedObject)) {
-        const entity = pickedObject.id;
-        if (entity && entity.label) {
-          const tileset = entity.label.text._value === 'OC 1' ? TILESET_1 : TILESET_2;
-          (async () => {
-            await flyToTileset(tileset, viewer);
-          })();
+    
+    console.log('Menambahkan titik untuk outcrops:', outcrops);
+    
+    // Batasi jumlah entity yang ditambahkan dalam satu frame
+    // Gunakan setTimeout untuk menambahkan entity secara bertahap
+    const addEntitiesInBatches = (outcropsArray, batchSize = 5, startIndex = 0) => {
+      const endIndex = Math.min(startIndex + batchSize, outcropsArray.length);
+      const currentBatch = outcropsArray.slice(startIndex, endIndex);
+      
+      currentBatch.forEach(outcrop => {
+        try {
+          console.log('Memproses outcrop:', outcrop);
+          
+          // Periksa apakah outcrop memiliki properti coordinates
+          if (outcrop.coordinates) {
+            console.log('Menambahkan titik untuk outcrop:', outcrop.assetId, 'di koordinat:', outcrop.coordinates);
+            
+            // Gunakan billboard yang lebih sederhana untuk performa yang lebih baik
+            const entity = viewer.entities.add({
+              name: outcrop.description?.title || `Outcrop ${outcrop.assetId}`,
+              position: Cartesian3.fromDegrees(
+                outcrop.coordinates.longitude || 0, 
+                outcrop.coordinates.latitude || 0, 
+                outcrop.coordinates.height || 0
+              ),
+              point: {
+                pixelSize: 15,
+                color: Color.RED,
+                outlineColor: Color.WHITE,
+                outlineWidth: 2
+              }
+            });
+            console.log('Entity berhasil ditambahkan:', entity);
+          } else if (outcrop.longitude && outcrop.latitude) {
+            // Format alternatif jika koordinat langsung di objek utama
+            console.log('Menambahkan titik untuk outcrop dengan format alternatif:', outcrop.assetId || outcrop._id);
+            
+            const entity = viewer.entities.add({
+              name: outcrop.name || outcrop.description?.title || `Outcrop ${outcrop.assetId || outcrop._id}`,
+              position: Cartesian3.fromDegrees(
+                outcrop.longitude || 0, 
+                outcrop.latitude || 0, 
+                outcrop.height || 0
+              ),
+              point: {
+                pixelSize: 15,
+                color: Color.RED,
+                outlineColor: Color.WHITE,
+                outlineWidth: 2
+              }
+            });
+            console.log('Entity berhasil ditambahkan:', entity);
+          } else {
+            // Coba cari koordinat di tempat lain dalam objek
+            let foundCoordinates = false;
+            
+            // Cek jika ada properti position dengan longitude dan latitude
+            if (outcrop.position && outcrop.position.longitude && outcrop.position.latitude) {
+              console.log('Menemukan koordinat di properti position:', outcrop.position);
+              try {
+                const entity = viewer.entities.add({
+                  name: outcrop.name || outcrop.description?.title || `Outcrop ${outcrop.assetId || outcrop._id || ''}`,
+                  position: Cartesian3.fromDegrees(
+                    outcrop.position.longitude || 0, 
+                    outcrop.position.latitude || 0, 
+                    outcrop.position.height || 0
+                  ),
+                  point: {
+                    pixelSize: 15,
+                    color: Color.RED,
+                    outlineColor: Color.WHITE,
+                    outlineWidth: 2
+                  }
+                });
+                console.log('Entity berhasil ditambahkan dari properti position:', entity);
+                foundCoordinates = true;
+              } catch (error) {
+                console.error('Error saat menambahkan entity dari properti position:', error);
+              }
+            }
+            
+            if (!foundCoordinates) {
+              console.warn('Outcrop tidak memiliki properti koordinat yang valid:', outcrop);
+            }
+          }
+        } catch (error) {
+          console.error('Error saat menambahkan titik untuk outcrop:', outcrop, error);
         }
+      });
+      
+      // Jika masih ada entity yang perlu ditambahkan, jadwalkan batch berikutnya
+      if (endIndex < outcropsArray.length) {
+        setTimeout(() => {
+          addEntitiesInBatches(outcropsArray, batchSize, endIndex);
+        }, 0);
+      } else {
+        // Semua entity telah ditambahkan
+        console.log('Jumlah entity setelah menambahkan titik:', viewer.entities.values.length);
       }
-    }, ScreenSpaceEventType.LEFT_CLICK);
+    };
+    
+    // Mulai menambahkan entity dalam batch
+    addEntitiesInBatches(outcrops);
   };
-
-  // Update useEffect untuk menambahkan point markers
-  useEffect(() => {
-    if (viewerRef.current?.cesiumElement && terrainProvider) {
-      // Beri sedikit waktu bagi viewer untuk benar-benar siap
-      setTimeout(() => {
-        addPointMarkers();
-      }, 1000);
-    }
-  }, [terrainProvider]);
 
   // Tambahkan fungsi helper untuk navigasi home view
   const flyToHomeView = (duration = 2) => {
     if (!viewerRef.current?.cesiumElement) return;
     
     const viewer = viewerRef.current.cesiumElement;
-    viewer.camera.flyTo({
-      destination: Cartesian3.fromDegrees(
-        120.0,  // Longitude Indonesia
-        -2.0,   // Latitude Indonesia
-        5000000.0  // Ketinggian (meter)
-      ),
-      orientation: {
-        heading: CesiumMath.toRadians(0),
-        pitch: CesiumMath.toRadians(-90),
-        roll: 0
-      },
-      duration: duration
+    
+    // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
+    requestAnimationFrame(() => {
+      viewer.camera.flyTo({
+        destination: Cartesian3.fromDegrees(
+          120.0,  // Longitude Indonesia
+          -2.0,   // Latitude Indonesia
+          5000000.0  // Ketinggian (meter)
+        ),
+        orientation: {
+          heading: CesiumMath.toRadians(0),
+          pitch: CesiumMath.toRadians(-90),
+          roll: 0
+        },
+        duration: duration,
+        // Tambahkan complete callback untuk mengurangi beban pada render
+        complete: () => {
+          console.log('Navigasi ke home view selesai');
+        }
+      });
     });
   };
 

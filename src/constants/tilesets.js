@@ -1,4 +1,5 @@
 import * as Cesium from 'cesium';
+import { getCameraFromMongoDB, saveCameraPosition } from '../services/api';
 
 // Data default untuk fallback
 const DEFAULT_TILESET_1 = {
@@ -49,188 +50,133 @@ const DEFAULT_TILESET_2 = {
 let TILESET_1 = { ...DEFAULT_TILESET_1 };
 let TILESET_2 = { ...DEFAULT_TILESET_2 };
 
-// Fungsi untuk mengambil data kamera dari MongoDB
-const getCameraFromMongoDB = async (outcropId) => {
-  try {
-    const response = await fetch(`http://localhost:5003/api/camera/latest/${outcropId}`);
-    if (!response.ok) {
-      throw new Error('Gagal mengambil data kamera');
-    }
-    return await response.json();
-  } catch (error) {
-    console.error('Error mengambil data kamera:', error);
-    return null;
-  }
-};
-
-// Fungsi untuk menginisialisasi data tileset dari MongoDB
+// Fungsi untuk menginisialisasi data tileset dari database
 const initializeTilesetsFromDB = async () => {
   try {
-    // Ambil data untuk OC 1
-    const camera1 = await getCameraFromMongoDB('OC1');
+    console.log('Menginisialisasi data tileset dari database...');
+    
+    // Ambil data kamera untuk tileset 1
+    const camera1 = await getCameraFromMongoDB(TILESET_1.assetId.toString());
     if (camera1) {
-      TILESET_1 = {
-        ...TILESET_1,
-        coordinates: {
-          longitude: camera1.position.longitude,
-          latitude: camera1.position.latitude,
-          height: camera1.position.height
-        },
-        camera: {
-          heading: camera1.orientation.heading,
-          pitch: camera1.orientation.pitch,
-          range: TILESET_1.camera.range
-        }
-      };
-    }
-
-    // Ambil data untuk OC 2
-    const camera2 = await getCameraFromMongoDB('OC2');
-    if (camera2) {
-      TILESET_2 = {
-        ...TILESET_2,
-        coordinates: {
-          longitude: camera2.position.longitude,
-          latitude: camera2.position.latitude,
-          height: camera2.position.height
-        },
-        camera: {
-          heading: camera2.orientation.heading,
-          pitch: camera2.orientation.pitch,
-          range: TILESET_2.camera.range
-        }
-      };
-    }
-
-    console.log('Data tileset berhasil diinisialisasi dari MongoDB');
-  } catch (error) {
-    console.error('Error inisialisasi tileset:', error);
-  }
-};
-
-// Panggil inisialisasi saat file di-load
-initializeTilesetsFromDB();
-
-const saveCameraPosition = async (cameraData, outcropId) => {
-  console.log('Mencoba menyimpan data kamera asli:', cameraData);
-  try {
-    const dataToSave = {
-      position: {
-        longitude: cameraData.longitude,
-        latitude: cameraData.latitude,
-        height: cameraData.height
-      },
-      orientation: {
-        heading: cameraData.heading,
-        pitch: cameraData.pitch,
-        roll: cameraData.roll
-      },
-      timestamp: new Date().toISOString(),
-      description: 'Saved Camera Position',
-      outcropId: outcropId // Tambahkan outcropId
-    };
-
-    console.log('Data yang akan dikirim ke server:', dataToSave);
-
-    const response = await fetch('http://localhost:5003/api/camera/save', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(dataToSave)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    console.log('Response dari server:', result);
-
-    // Update tileset lokal setelah berhasil menyimpan
-    if (outcropId === 'OC1') {
-      TILESET_1.coordinates = dataToSave.position;
+      console.log('Data kamera untuk tileset 1 ditemukan:', camera1);
+      // Update data kamera di TILESET_1 jika ada
       TILESET_1.camera = {
-        heading: dataToSave.orientation.heading,
-        pitch: dataToSave.orientation.pitch,
-        range: TILESET_1.camera.range
+        heading: camera1.orientation.heading,
+        pitch: camera1.orientation.pitch,
+        range: 500 // Range tetap default
       };
-    } else if (outcropId === 'OC2') {
-      TILESET_2.coordinates = dataToSave.position;
-      TILESET_2.camera = {
-        heading: dataToSave.orientation.heading,
-        pitch: dataToSave.orientation.pitch,
-        range: TILESET_2.camera.range
+      TILESET_1.coordinates = {
+        longitude: camera1.position.longitude,
+        latitude: camera1.position.latitude,
+        height: camera1.position.height
       };
     }
-
-    return result;
+    
+    // Ambil data kamera untuk tileset 2
+    const camera2 = await getCameraFromMongoDB(TILESET_2.assetId.toString());
+    if (camera2) {
+      console.log('Data kamera untuk tileset 2 ditemukan:', camera2);
+      // Update data kamera di TILESET_2 jika ada
+      TILESET_2.camera = {
+        heading: camera2.orientation.heading,
+        pitch: camera2.orientation.pitch,
+        range: 400 // Range tetap default
+      };
+      TILESET_2.coordinates = {
+        longitude: camera2.position.longitude,
+        latitude: camera2.position.latitude,
+        height: camera2.position.height
+      };
+    }
+    
+    console.log('Inisialisasi data tileset selesai');
   } catch (error) {
-    console.error('Error dalam saveCameraPosition:', error);
-    throw new Error('Gagal menyimpan posisi kamera: ' + error.message);
+    console.error('Error saat inisialisasi data tileset:', error);
   }
 };
 
-const applyCameraPosition = (viewer, savedPosition) => {
-  viewer.camera.flyTo({
-    destination: Cesium.Cartesian3.fromDegrees(
-      savedPosition.position.longitude,
-      savedPosition.position.latitude,
-      savedPosition.position.height
-    ),
-    orientation: {
-      heading: Cesium.Math.toRadians(savedPosition.orientation.heading),
-      pitch: Cesium.Math.toRadians(savedPosition.orientation.pitch),
-      roll: Cesium.Math.toRadians(savedPosition.orientation.roll)
-    },
-    duration: 2 // Durasi animasi dalam detik
-  });
-};
-
-const handleSaveCamera = async (viewer, customData = null) => {
+// Fungsi untuk menyimpan posisi kamera
+const handleSaveCamera = async (viewer) => {
   try {
-    let cameraData;
-    let outcropId;
+    const camera = viewer.camera;
+    const ellipsoid = Cesium.Ellipsoid.WGS84;
+    const cartographic = ellipsoid.cartesianToCartographic(camera.position);
     
-    if (customData) {
-      cameraData = customData;
-      console.log('Menggunakan data kamera dari panel:', cameraData);
-    } else {
-      const camera = viewer.camera;
-      const position = camera.position;
-      const cartographic = Cesium.Cartographic.fromCartesian(position);
-      
-      cameraData = {
+    const cameraData = {
+      position: {
         longitude: Cesium.Math.toDegrees(cartographic.longitude),
         latitude: Cesium.Math.toDegrees(cartographic.latitude),
-        height: cartographic.height,
+        height: cartographic.height
+      },
+      orientation: {
         heading: Cesium.Math.toDegrees(camera.heading),
         pitch: Cesium.Math.toDegrees(camera.pitch),
         roll: Cesium.Math.toDegrees(camera.roll)
-      };
-    }
-
+      },
+      description: 'Saved Camera Position'
+    };
+    
     // Tentukan outcropId berdasarkan jarak
+    const position = Cesium.Cartesian3.fromDegrees(
+      cameraData.position.longitude,
+      cameraData.position.latitude,
+      cameraData.position.height
+    );
+    
     const distanceToTileset1 = Cesium.Cartesian3.distance(
-      Cesium.Cartesian3.fromDegrees(TILESET_1.coordinates.longitude, TILESET_1.coordinates.latitude, TILESET_1.coordinates.height),
-      Cesium.Cartesian3.fromDegrees(cameraData.longitude, cameraData.latitude, cameraData.height)
+      Cesium.Cartesian3.fromDegrees(
+        TILESET_1.coordinates.longitude,
+        TILESET_1.coordinates.latitude,
+        TILESET_1.coordinates.height
+      ),
+      position
     );
     
     const distanceToTileset2 = Cesium.Cartesian3.distance(
-      Cesium.Cartesian3.fromDegrees(TILESET_2.coordinates.longitude, TILESET_2.coordinates.latitude, TILESET_2.coordinates.height),
-      Cesium.Cartesian3.fromDegrees(cameraData.longitude, cameraData.latitude, cameraData.height)
+      Cesium.Cartesian3.fromDegrees(
+        TILESET_2.coordinates.longitude,
+        TILESET_2.coordinates.latitude,
+        TILESET_2.coordinates.height
+      ),
+      position
     );
-
-    outcropId = distanceToTileset1 < distanceToTileset2 ? 'OC1' : 'OC2';
     
-    const result = await saveCameraPosition(cameraData, outcropId);
-    console.log('Data kamera berhasil disimpan untuk:', outcropId);
-
+    // Gunakan assetId sebagai outcropId
+    const outcropId = distanceToTileset1 < distanceToTileset2 
+      ? TILESET_1.assetId.toString() 
+      : TILESET_2.assetId.toString();
+    
+    // Tambahkan outcropId ke data kamera
+    cameraData.outcropId = outcropId;
+    
+    console.log('Menyimpan posisi kamera untuk outcropId:', outcropId);
+    const result = await saveCameraPosition(cameraData);
+    console.log('Data kamera berhasil disimpan:', result);
+    
     alert('Posisi kamera berhasil disimpan!');
   } catch (error) {
-    console.error('Error saat menyimpan:', error);
-    alert(error.message);
+    console.error('Error saat menyimpan posisi kamera:', error);
+    alert('Gagal menyimpan posisi kamera: ' + error.message);
   }
+};
+
+// Fungsi untuk menerapkan posisi kamera
+const applyCameraPosition = (viewer, cameraPosition) => {
+  if (!viewer || !cameraPosition) return;
+  
+  viewer.camera.flyTo({
+    destination: Cesium.Cartesian3.fromDegrees(
+      cameraPosition.position.longitude,
+      cameraPosition.position.latitude,
+      cameraPosition.position.height
+    ),
+    orientation: {
+      heading: Cesium.Math.toRadians(cameraPosition.orientation.heading),
+      pitch: Cesium.Math.toRadians(cameraPosition.orientation.pitch),
+      roll: Cesium.Math.toRadians(cameraPosition.orientation.roll)
+    },
+    duration: 2
+  });
 };
 
 export {

@@ -6,7 +6,7 @@ import PhotoHoverPopup from './PhotoHoverPopup';
 import './PhotoPoints.css';
 
 // URL API server
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5003';
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5004';
 
 const PhotoPoints = ({ outcropId, viewer }) => {
   const [photos, setPhotos] = useState([]);
@@ -19,12 +19,13 @@ const PhotoPoints = ({ outcropId, viewer }) => {
   useEffect(() => {
     const fetchPhotos = async () => {
       if (!outcropId) return;
-      
+
       try {
         setLoading(true);
+        console.log('Mengambil foto untuk outcropId:', outcropId);
         const data = await getPhotosByOutcropId(outcropId);
         console.log('Foto yang diambil dari API:', data);
-        
+
         // Verifikasi data foto
         if (data && Array.isArray(data)) {
           // Validasi setiap foto
@@ -37,18 +38,22 @@ const PhotoPoints = ({ outcropId, viewer }) => {
             } else {
               // Normalkan format URL jika perlu
               let url = photo.photoUrl;
-              
-              // Jangan manipulasi URL lengkap
+
+              // Jika URL tidak dimulai dengan http atau /, tambahkan API_URL
               if (!url.startsWith('http') && !url.startsWith('/')) {
-                // Kalau tidak ada http atau /, tambahkan path relatif
-                photo.photoUrl = `uploads/${photo._id}.jpg`;
+                photo.photoUrl = `${API_URL}/${url}`;
+                console.log('URL foto dinormalisasi menjadi:', photo.photoUrl);
+              } else if (url.startsWith('/')) {
+                // Jika URL dimulai dengan /, tambahkan API_URL tanpa /
+                photo.photoUrl = `${API_URL}${url}`;
+                console.log('URL foto dinormalisasi menjadi:', photo.photoUrl);
               }
-              
+
               console.log('URL foto valid:', photo.photoUrl);
             }
             return photo;
           });
-          
+
           setPhotos(validatedData);
         } else {
           console.error('Format data foto tidak valid:', data);
@@ -67,37 +72,29 @@ const PhotoPoints = ({ outcropId, viewer }) => {
 
   const handleMouseEnter = (photo, position) => {
     console.log('Hover pada foto:', photo);
-    
+
     // Menyalin objek foto untuk memastikan referensi baru
     const photoData = { ...photo };
-    
-    // Pastikan URL valid dengan menambahkan base URL jika perlu
-    if (photoData.photoUrl && !photoData.photoUrl.startsWith('http')) {
-      // Test path-path yang mungkin
-      console.log('URL relatif terdeteksi, mencoba menormalisasi:', photoData.photoUrl);
-      
-      // Ini akan menjadi tugas komponen PhotoHoverPopup
-    }
-    
+
     setHoveredPhoto(photoData);
-    
+
     if (viewer && viewer.scene) {
       try {
         // Membuat Cartesian3 dari posisi geografis
         const cartesian = Cesium.Cartesian3.fromDegrees(
-          position.longitude, 
-          position.latitude, 
+          position.longitude,
+          position.latitude,
           position.height
         );
-        
+
         // Cek apakah scene dan SceneTransforms tersedia
         if (viewer.scene && cartesian) {
-          // Gunakan metode wgs84ToWindowCoordinates
+          // Gunakan metode worldToWindowCoordinates
           const windowPosition = Cesium.SceneTransforms.worldToWindowCoordinates(
             viewer.scene,
             cartesian
           );
-          
+
           if (windowPosition) {
             setPopupPosition({
               x: windowPosition.x,
@@ -130,12 +127,13 @@ const PhotoPoints = ({ outcropId, viewer }) => {
             photo.position.height
           )}
           point={{
-            pixelSize: 16, // Memperbesar ukuran point agar lebih terlihat
+            pixelSize: hoveredPhoto && hoveredPhoto._id === photo._id ? 18 : 14,
             color: Cesium.Color.DODGERBLUE,
             outlineColor: Cesium.Color.WHITE,
-            outlineWidth: 3,
+            outlineWidth: 2,
             heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY // Memastikan point selalu terlihat
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            scaleByDistance: new Cesium.NearFarScalar(1.5e2, 1.0, 8.0e6, 0.5)
           }}
           name={`Foto ${photo._id}`}
           description={`
@@ -153,36 +151,27 @@ const PhotoPoints = ({ outcropId, viewer }) => {
             fillColor: Cesium.Color.WHITE,
             outlineColor: Cesium.Color.BLACK,
             outlineWidth: 2,
-            style: hoveredPhoto && hoveredPhoto._id === photo._id ? 'FILL_AND_OUTLINE' : 'NONE',
+            style: hoveredPhoto && hoveredPhoto._id === photo._id ? 'FILL_AND_OUTLINE' : 'FILL',
             verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-            pixelOffset: new Cesium.Cartesian2(0, -10),
+            pixelOffset: new Cesium.Cartesian2(0, -2),
+            eyeOffset: new Cesium.Cartesian3(0, 0, -5),
             showBackground: true,
             backgroundColor: new Cesium.Color(0, 0, 0, 0.7),
             backgroundPadding: new Cesium.Cartesian2(8, 4),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
+            scaleByDistance: new Cesium.NearFarScalar(1.5e2, 1.5, 8.0e6, 0.0)
           }}
         />
       ))}
 
       {hoveredPhoto && (
-        <div 
-          className="photo-hover-container"
-          style={{
-            position: 'absolute',
-            left: `${popupPosition.x}px`,
-            top: `${popupPosition.y}px`,
-            pointerEvents: 'none',
-            transform: 'translate(-50%, 0)', // Mempertahankan centering horizontal
-            zIndex: 1000 // Memastikan popup ada di atas entity
-          }}
-        >
-          <PhotoHoverPopup 
-            photo={hoveredPhoto}
-            show={!!hoveredPhoto} 
-          />
-          <div className="popup-arrow"></div> 
-        </div>
+        <PhotoHoverPopup 
+          photo={hoveredPhoto} 
+          position={popupPosition} 
+          apiUrl={API_URL}
+        />
       )}
     </div>
   );

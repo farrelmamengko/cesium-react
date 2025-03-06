@@ -42,7 +42,12 @@ export const useTilesets = () => {
   const flyToTileset = async (tileset, viewer) => {
     if (!viewer) return;
     
-    const outcropId = tileset.assetId === TILESET_1.assetId ? 'OC1' : 'OC2';
+    // Gunakan assetId sebagai outcropId untuk mengambil data dari MongoDB
+    const outcropId = tileset.assetId.toString();
+    console.log('Menggunakan outcropId:', outcropId, 'untuk tileset:', tileset.description.title);
+    console.log('Detail tileset:', JSON.stringify(tileset));
+    console.log('API_URL yang digunakan:', process.env.REACT_APP_API_URL || 'http://localhost:5004');
+    
     setActiveTilesetId(tileset.assetId);
     setActiveTileset(tileset);
     
@@ -51,7 +56,8 @@ export const useTilesets = () => {
       const latestPosition = await getCameraFromMongoDB(outcropId);
       
       if (latestPosition) {
-        console.log('Menggunakan posisi kamera dari MongoDB untuk:', outcropId);
+        console.log('Menggunakan posisi kamera dari MongoDB untuk outcropId:', outcropId);
+        console.log('Data posisi kamera:', latestPosition);
         
         viewer.camera.flyTo({
           destination: Cartesian3.fromDegrees(
@@ -70,7 +76,7 @@ export const useTilesets = () => {
         return;
       }
 
-      console.log('Menggunakan posisi default untuk:', outcropId);
+      console.log('Tidak ada data kamera di MongoDB untuk outcropId:', outcropId, 'menggunakan posisi default');
       // Fallback ke posisi default
       viewer.camera.flyTo({
         destination: Cartesian3.fromDegrees(

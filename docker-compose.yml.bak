@@ -1,0 +1,26 @@
+services:
+  app:
+    build: .
+    ports:
+      - "5004:5003"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
+      - PORT=5003
+    volumes:
+      - ./uploads:/app/uploads
+      - ./build:/app/build
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-seed:/mongo-seed
+    restart: unless-stopped
+
+volumes:
+  mongodb_data: 

@@ -4,21 +4,21 @@ import './PhotoHoverPopup.css';
 // Base64 placeholder image (gray square with camera icon)
 const PLACEHOLDER_IMAGE = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjIwMCIgaGVpZ2h0PSIxMDAiIGZpbGw9IiNmMmYyZjIiLz4KPHRleHQgeD0iMTAwIiB5PSI1MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjEyIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkb21pbmFudC1iYXNlbGluZT0ibWlkZGxlIiBmaWxsPSIjNjY2NjY2Ij5ObyBJbWFnZSBBdmFpbGFibGU8L3RleHQ+Cjwvc3ZnPg==";
 
-// URL API server
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5003';
-
-const PhotoHoverPopup = ({ photo, show }) => {
+const PhotoHoverPopup = ({ photo, position, apiUrl }) => {
   // Semua hooks di bagian atas komponen
   const [imageUrl, setImageUrl] = useState('');
   const [useDefault, setUseDefault] = useState(false);
   const [loadingImage, setLoadingImage] = useState(false);
   const [attempts, setAttempts] = useState(0);
 
+  // Gunakan apiUrl yang diberikan atau default
+  const API_URL = apiUrl || process.env.REACT_APP_API_URL || 'http://localhost:5004';
+
   useEffect(() => {
     // Hanya jalankan jika photo tersedia
-    if (photo && show) {
+    if (photo) {
       console.log('Photo data untuk hover popup:', photo);
-      
+
       // Reset state
       setUseDefault(false);
       setLoadingImage(true);
@@ -27,7 +27,7 @@ const PhotoHoverPopup = ({ photo, show }) => {
       if (photo.photoUrl) {
         // Coba format URL yang benar
         let url = photo.photoUrl;
-        
+
         // Jika URL tidak dimulai dengan http atau / tambahkan base URL
         if (!url.startsWith('http') && !url.startsWith('/')) {
           url = `${API_URL}/${url}`;
@@ -35,7 +35,7 @@ const PhotoHoverPopup = ({ photo, show }) => {
           // Jika URL dimulai dengan / tetapi bukan //, tambahkan base URL tanpa /
           url = `${API_URL}${url}`;
         }
-        
+
         console.log('URL Foto yang akan digunakan:', url);
         setImageUrl(url);
       } else if (photo.imageUrl) {
@@ -48,28 +48,30 @@ const PhotoHoverPopup = ({ photo, show }) => {
         setLoadingImage(false);
       }
     }
-  }, [photo, show]);
+  }, [photo, API_URL]);
 
-  // Fungsi untuk menangani error loading gambar
-  const handleImageError = () => {
+  // Handler untuk error loading gambar
+  const handleImageError = (e) => {
     console.error('Error loading image:', imageUrl);
-    
-    // Coba dengan 1 alternatif URL jika ini percobaan pertama
-    if (attempts === 0 && photo) {
-      setAttempts(1);
-      
-      // Coba format URL alternatif
-      if (photo._id) {
-        const alternativeUrl = `${API_URL}/uploads/${photo._id}.jpg`;
-        console.log('Mencoba URL alternatif:', alternativeUrl);
-        setImageUrl(alternativeUrl);
-        return;
-      }
+
+    // Jika sudah mencoba beberapa kali, gunakan default
+    if (attempts >= 2) {
+      console.log('Terlalu banyak percobaan, menggunakan gambar default');
+      setUseDefault(true);
+      setLoadingImage(false);
+      return;
     }
-    
-    // Jika masih gagal setelah mencoba alternatif, gunakan default
-    setUseDefault(true);
-    setLoadingImage(false);
+
+    // Coba format URL alternatif
+    if (photo && photo._id) {
+      const alternativeUrl = `${API_URL}/uploads/photos/${photo._id}.jpg`;
+      console.log('Mencoba URL alternatif:', alternativeUrl);
+      setImageUrl(alternativeUrl);
+      setAttempts(prev => prev + 1);
+    } else {
+      setUseDefault(true);
+      setLoadingImage(false);
+    }
   };
 
   // Fungsi ketika gambar berhasil di-load
@@ -78,48 +80,56 @@ const PhotoHoverPopup = ({ photo, show }) => {
     setLoadingImage(false);
   };
 
-  // Gunakan early return setelah semua hooks didefinisikan
-  if (!show || !photo) return null;
+  // Jika tidak ada data foto, return null
+  if (!photo) return null;
 
   return (
-    <div className="photo-hover-popup">
-      <div className="popup-content">
-        <div className="popup-image-container">
-          {loadingImage && !useDefault && (
-            <div className="image-loading">Memuat gambar...</div>
-          )}
-          
-          {!useDefault ? (
-            <img 
-              src={imageUrl} 
-              alt={photo.description || 'Foto Outcrop'} 
-              className="popup-image" 
-              onError={handleImageError}
-              onLoad={handleImageLoad}
-              style={{ display: loadingImage ? 'none' : 'block' }}
-            />
-          ) : (
-            <div className="image-placeholder">
-              <img 
-                src={PLACEHOLDER_IMAGE}
-                alt="Gambar tidak tersedia" 
-                className="placeholder-img" 
-              />
-              <p>Gambar tidak tersedia</p>
-            </div>
-          )}
-        </div>
-        <div className="popup-details">
+    <div 
+      className="photo-hover-container"
+      style={{
+        position: 'absolute',
+        left: `${position.x}px`,
+        top: `${position.y}px`,
+        pointerEvents: 'none',
+        transform: 'translate(-50%, 0)',
+        zIndex: 1000
+      }}
+    >
+      <div className="photo-hover-popup">
+        <div className="popup-content">
           <h4>{photo.description || 'Foto Outcrop'}</h4>
-          <p>
-            <small>
-              Lokasi: {photo.position.longitude.toFixed(6)}, {photo.position.latitude.toFixed(6)}
-              <br />
-              Diambil pada: {new Date(photo.createdAt).toLocaleString()}
-            </small>
-          </p>
+
+          <div className="popup-image-container">
+            {loadingImage && <div className="image-loading"></div>}
+
+            {useDefault ? (
+              <div className="image-placeholder">
+                <img src={PLACEHOLDER_IMAGE} alt="Placeholder" className="placeholder-img" />
+                <p>Gambar tidak tersedia</p>
+              </div>
+            ) : (
+              <img
+                src={imageUrl}
+                alt={photo.description || 'Foto Outcrop'}
+                className="popup-image"
+                onLoad={handleImageLoad}
+                onError={handleImageError}
+                style={{ maxWidth: '100%', maxHeight: '100%' }}
+              />
+            )}
+          </div>
+          
+          <div className="popup-details">
+            <p>
+              <strong>Lokasi:</strong> {photo.position ? 
+                `${photo.position.longitude.toFixed(6)}, ${photo.position.latitude.toFixed(6)}` : 
+                'Tidak tersedia'}
+            </p>
+            <small>Diambil pada: {new Date(photo.createdAt).toLocaleString()}</small>
+          </div>
         </div>
       </div>
+      <div className="popup-arrow"></div>
     </div>
   );
 };

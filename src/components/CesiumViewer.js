@@ -1,15 +1,17 @@
 import React, { useEffect } from 'react';
-import { Viewer, Cesium3DTileset, ScreenSpaceEventHandler, ScreenSpaceEvent } from 'resium';
+import { Viewer, Cesium3DTileset, ScreenSpaceEventHandler, ScreenSpaceEvent, Entity } from 'resium';
 import { 
   Matrix4,
   Cartesian3,
   Cartographic,
   Math as CesiumMath,
-  ScreenSpaceEventType
+  ScreenSpaceEventType,
+  Color
 } from 'cesium';
 import * as Cesium from 'cesium';
 import { TILESET_1, TILESET_2 } from '../constants/tilesets';
 import PhotoPoints from './PhotoPoints';
+import { fetchOutcrops } from '../services/api';
 
 const CesiumViewer = ({ 
   viewerRef,
@@ -45,6 +47,61 @@ const CesiumViewer = ({
       });
     }
   };
+  
+  // Tambahkan useEffect untuk memuat outcrops
+  useEffect(() => {
+    const loadOutcrops = async () => {
+      try {
+        console.log('Mencoba mengambil data outcrops dari CesiumViewer...');
+        const outcropsData = await fetchOutcrops();
+        console.log('Data outcrops berhasil diambil dari CesiumViewer:', outcropsData);
+        
+        if (!viewerRef.current?.cesiumElement) {
+          console.error('Viewer belum siap');
+          return;
+        }
+        
+        const viewer = viewerRef.current.cesiumElement;
+        
+        // Tambahkan entity untuk setiap outcrop
+        outcropsData.forEach(outcrop => {
+          try {
+            // Periksa apakah outcrop memiliki properti coordinates
+            if (outcrop.coordinates) {
+              console.log('Menambahkan titik untuk outcrop:', outcrop.assetId, 'di koordinat:', outcrop.coordinates);
+              viewer.entities.add({
+                name: outcrop.description?.title || `Outcrop ${outcrop.assetId}`,
+                position: Cartesian3.fromDegrees(
+                  outcrop.coordinates.longitude || 0, 
+                  outcrop.coordinates.latitude || 0, 
+                  outcrop.coordinates.height || 0
+                ),
+                point: {
+                  pixelSize: 10,
+                  color: Color.RED,
+                  outlineColor: Color.WHITE,
+                  outlineWidth: 2
+                }
+              });
+            } else {
+              console.warn('Outcrop tidak memiliki properti coordinates:', outcrop);
+            }
+          } catch (error) {
+            console.error('Error saat menambahkan titik untuk outcrop:', outcrop, error);
+          }
+        });
+      } catch (error) {
+        console.error('Gagal mengambil data outcrops dari CesiumViewer:', error);
+      }
+    };
+    
+    // Panggil fungsi loadOutcrops setelah viewer siap
+    if (viewerRef.current?.cesiumElement) {
+      loadOutcrops();
+    } else {
+      console.error('Viewer belum siap untuk memuat outcrops');
+    }
+  }, [viewerRef.current]);
   
   return (
     <Viewer
