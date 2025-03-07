@@ -8,36 +8,130 @@ export const fetchOutcrops = async () => {
     console.log('Mengambil data outcrops dari:', `${API_URL}/outcrops`);
     console.log('API_URL yang digunakan:', API_URL);
     
-    const response = await fetch(`${API_URL}/outcrops`);
-    if (!response.ok) {
-      console.error(`Error response: ${response.status} ${response.statusText}`);
-      throw new Error(`Gagal mengambil data outcrops: ${response.status} ${response.statusText}`);
+    // Tambahkan timeout untuk menghindari permintaan yang terlalu lama
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 detik timeout
+    
+    try {
+      const response = await fetch(`${API_URL}/outcrops`, {
+        signal: controller.signal,
+        headers: {
+          'Accept': 'application/json',
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        console.error(`Error response: ${response.status} ${response.statusText}`);
+        throw new Error(`Gagal mengambil data outcrops: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      console.log('Data outcrops yang diterima (raw):', JSON.stringify(data));
+      
+      // Periksa struktur data
+      if (Array.isArray(data)) {
+        console.log('Data outcrops adalah array dengan panjang:', data.length);
+        
+        // Validasi data
+        const validData = data.filter(outcrop => {
+          if (!outcrop) {
+            console.warn('Outcrop adalah null atau undefined');
+            return false;
+          }
+          
+          if (outcrop.coordinates) {
+            if (!outcrop.coordinates.longitude || !outcrop.coordinates.latitude) {
+              console.warn('Outcrop memiliki koordinat yang tidak valid:', outcrop);
+              return false;
+            }
+            return true;
+          } else if (outcrop.position) {
+            if (!outcrop.position.longitude || !outcrop.position.latitude) {
+              console.warn('Outcrop memiliki posisi yang tidak valid:', outcrop);
+              return false;
+            }
+            return true;
+          }
+          
+          console.warn('Outcrop tidak memiliki koordinat atau posisi:', outcrop);
+          return false;
+        });
+        
+        console.log('Data outcrops yang valid:', validData.length);
+        
+        if (validData.length === 0) {
+          console.warn('Tidak ada data outcrops yang valid, menggunakan data hardcoded');
+          return getHardcodedOutcrops();
+        }
+        
+        return validData;
+      } else if (data && typeof data === 'object') {
+        // Jika data adalah objek, coba cari properti yang berisi array
+        for (const key in data) {
+          if (Array.isArray(data[key])) {
+            console.log(`Menemukan array di properti ${key} dengan panjang:`, data[key].length);
+            return data[key];
+          }
+        }
+      }
+      
+      console.warn('Format data outcrops tidak dikenali, menggunakan data hardcoded:', data);
+      return getHardcodedOutcrops();
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        console.error('Permintaan timeout setelah 10 detik');
+        console.warn('Menggunakan data hardcoded karena timeout');
+        return getHardcodedOutcrops();
+      }
+      throw error;
     }
-    
-    const data = await response.json();
-    console.log('Data outcrops yang diterima (raw):', JSON.stringify(data));
-    
-    // Periksa struktur data
-    if (data && data.value && Array.isArray(data.value)) {
-      console.log('Data outcrops memiliki format { value: [...], Count: ... }');
-      console.log('Jumlah outcrops:', data.Count);
-    } else if (Array.isArray(data)) {
-      console.log('Data outcrops adalah array langsung');
-      console.log('Jumlah outcrops:', data.length);
-    } else {
-      console.log('Data outcrops memiliki format lain:', typeof data);
-    }
-    
-    // Periksa apakah data kosong
-    if (!data || (Array.isArray(data) && data.length === 0) || (data.value && data.value.length === 0)) {
-      console.warn('Data outcrops kosong');
-    }
-    
-    return data;
   } catch (error) {
     console.error('Error saat mengambil data outcrops:', error);
-    throw error;
+    
+    // Coba fallback ke data hardcoded jika tidak bisa mengambil dari API
+    console.log('Menggunakan data outcrops hardcoded sebagai fallback');
+    return getHardcodedOutcrops();
   }
+};
+
+// Fungsi untuk mendapatkan data outcrops hardcoded
+const getHardcodedOutcrops = () => {
+  console.log('Menggunakan data outcrops hardcoded');
+  
+  // Data hardcoded untuk OC1 dan OC2
+  return [
+    {
+      _id: 'OC1',
+      assetId: 2282213,
+      coordinates: { longitude: 130.284065, latitude: -2.029881, height: 75.86 },
+      camera: { heading: 10, pitch: 90, range: 500 },
+      description: {
+        title: 'OC 1 - Pre - Tertiary Unit – Upper Jurassic Stratigraphy Unit – Lelinta Formation (23JUL01)',
+        location: 'Seget Island, Misool, Southwest Papua',
+        coordinate: 'UTM 52S 642809 9775585',
+        strikeDip: 'N 142 E / 21',
+        depositionalEnv: 'Shallow Marine',
+        petroleumSystem: 'Regional Top Seal'
+      }
+    },
+    {
+      _id: 'OC2',
+      assetId: 2298041,
+      coordinates: { longitude: 130.310587, latitude: -2.018613, height: 67.32 },
+      camera: { heading: 30, pitch: -35, range: 400 },
+      description: {
+        title: 'OC 2 - Pre - Tertiary Unit – Lower Cretaceous Stratigraphy Unit – Gamta Formation (23JLG01)',
+        location: 'Ulubam Island, Misool, Southwest Papua',
+        coordinate: 'UTM 52S 645762 9776900',
+        strikeDip: 'N 360 E / 28',
+        depositionalEnv: 'Shallow Marine (Platform Carbonate)',
+        petroleumSystem: 'Reservoir Candidate'
+      }
+    }
+  ];
 };
 
 export const fetchOutcropById = async (id) => {
@@ -184,14 +278,139 @@ export const getTilesets = async () => {
 };
 
 // Fungsi untuk mendapatkan data kamera
-export const getCameraPosition = async () => {
+export const getCameraPosition = async (outcropId) => {
   try {
-    console.log('Mengambil posisi kamera dari:', `${API_URL}/api/camera/latest`);
-    const response = await axios.get(`${API_URL}/api/camera/latest`);
-    console.log('Data posisi kamera yang diterima:', response.data);
-    return response.data;
+    console.log(`Mengambil posisi kamera untuk outcrop ${outcropId} dari:`, `${API_URL}/api/camera/latest/${outcropId}`);
+    
+    // Coba endpoint /api/camera/latest/:outcropId terlebih dahulu
+    try {
+      const response = await fetch(`${API_URL}/api/camera/latest/${outcropId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Posisi kamera untuk outcrop ${outcropId} ditemukan dari endpoint /api/camera/latest:`, data);
+        return data;
+      } else {
+        console.log(`Endpoint /api/camera/latest/${outcropId} tidak tersedia, mencoba endpoint alternatif...`);
+      }
+    } catch (error) {
+      console.log(`Error saat mengakses endpoint /api/camera/latest/${outcropId}:`, error.message);
+    }
+    
+    // Coba endpoint /camerapositions
+    try {
+      console.log(`Mencoba mendapatkan posisi kamera dari endpoint /camerapositions dengan outcropId ${outcropId}`);
+      const response = await fetch(`${API_URL}/camerapositions`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log(`Data camerapositions:`, data);
+        
+        // Cari posisi kamera dengan outcropId yang sesuai
+        let cameraPositions = data;
+        if (!Array.isArray(data) && data.value) {
+          cameraPositions = data.value;
+        }
+        
+        const cameraPosition = cameraPositions.find(pos => 
+          pos.outcropId === outcropId || 
+          pos.outcropId === outcropId.toString() || 
+          (pos.outcropId && pos.outcropId.toString() === outcropId.toString())
+        );
+        
+        if (cameraPosition) {
+          console.log(`Posisi kamera untuk outcrop ${outcropId} ditemukan dari endpoint /camerapositions:`, cameraPosition);
+          return cameraPosition;
+        } else {
+          console.log(`Tidak ada posisi kamera yang ditemukan untuk outcrop ${outcropId} di endpoint /camerapositions`);
+        }
+      } else {
+        console.log(`Endpoint /camerapositions tidak tersedia atau mengembalikan error:`, response.status);
+      }
+    } catch (error) {
+      console.log(`Error saat mengakses endpoint /camerapositions:`, error.message);
+    }
+    
+    // Jika tidak ada posisi kamera yang ditemukan, coba cari di data outcrops
+    try {
+      console.log(`Mencoba mendapatkan posisi kamera dari data outcrop dengan id ${outcropId}`);
+      const response = await fetch(`${API_URL}/outcrops/${outcropId}`);
+      
+      if (response.ok) {
+        const outcrop = await response.json();
+        console.log(`Data outcrop:`, outcrop);
+        
+        if (outcrop && outcrop.camera) {
+          // Konversi format data outcrop.camera ke format yang diharapkan
+          const cameraPosition = {
+            position: outcrop.coordinates || {},
+            orientation: {
+              heading: outcrop.camera.heading || 0,
+              pitch: outcrop.camera.pitch || -45,
+              roll: 0
+            }
+          };
+          
+          console.log(`Posisi kamera dibuat dari data outcrop:`, cameraPosition);
+          return cameraPosition;
+        } else if (outcrop && outcrop.coordinates) {
+          // Jika tidak ada data kamera, gunakan koordinat outcrop dengan orientasi default
+          const cameraPosition = {
+            position: outcrop.coordinates,
+            orientation: {
+              heading: 0,
+              pitch: -45,
+              roll: 0
+            }
+          };
+          
+          console.log(`Posisi kamera dibuat dari koordinat outcrop:`, cameraPosition);
+          return cameraPosition;
+        }
+      }
+    } catch (error) {
+      console.log(`Error saat mengakses endpoint /outcrops/${outcropId}:`, error.message);
+    }
+    
+    // Jika tidak ada posisi kamera yang ditemukan, coba cari outcrop berdasarkan assetId
+    try {
+      console.log(`Mencoba mendapatkan outcrop dengan assetId ${outcropId}`);
+      const response = await fetch(`${API_URL}/outcrops`);
+      
+      if (response.ok) {
+        const outcrops = await response.json();
+        console.log(`Data outcrops:`, outcrops);
+        
+        // Cari outcrop dengan assetId yang sesuai
+        const outcrop = outcrops.find(o => 
+          o.assetId === parseInt(outcropId) || 
+          o.assetId === outcropId || 
+          (o.assetId && o.assetId.toString() === outcropId.toString())
+        );
+        
+        if (outcrop && outcrop.coordinates) {
+          // Gunakan koordinat outcrop dengan orientasi default
+          const cameraPosition = {
+            position: outcrop.coordinates,
+            orientation: {
+              heading: outcrop.camera?.heading || 0,
+              pitch: outcrop.camera?.pitch || -45,
+              roll: 0
+            }
+          };
+          
+          console.log(`Posisi kamera dibuat dari outcrop dengan assetId ${outcropId}:`, cameraPosition);
+          return cameraPosition;
+        }
+      }
+    } catch (error) {
+      console.log(`Error saat mencari outcrop dengan assetId ${outcropId}:`, error.message);
+    }
+    
+    console.warn(`Tidak dapat menemukan posisi kamera untuk outcrop ${outcropId} dari semua endpoint yang tersedia`);
+    return null;
   } catch (error) {
-    console.error('Error fetching camera position:', error);
+    console.error(`Error saat mengambil posisi kamera untuk outcrop ${outcropId}:`, error);
     throw error;
   }
 };
@@ -241,4 +460,4 @@ export default {
   saveCameraPosition,
   getLatestCameraPosition,
   getCameraFromMongoDB
-}; 
+};

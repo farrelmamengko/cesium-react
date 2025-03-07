@@ -17,7 +17,8 @@ import {
   Cartographic,
   ClockViewModel,
   SceneMode,
-  defined
+  defined,
+  HeadingPitchRange
 } from 'cesium';
 import TerrainMeasurement from './utils/TerrainMeasurement';
 import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -92,12 +93,32 @@ function App() {
   // Load terrain
   useEffect(() => {
     const loadTerrain = async () => {
+      if (!viewerRef.current) {
+        console.warn('Viewer belum siap, menunda pemuatan terrain');
+        return;
+      }
+      
+      console.log('Memuat terrain...');
+      
       try {
-        const terrain = await createWorldTerrainAsync();
-        setTerrainProvider(terrain);
+        // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
+        requestAnimationFrame(async () => {
+          try {
+            // Buat terrain dengan opsi yang lebih ringan
+            const terrainProvider = await createWorldTerrainAsync({
+              requestVertexNormals: false, // Matikan vertex normals untuk performa lebih baik
+              requestWaterMask: false      // Matikan water mask untuk performa lebih baik
+            });
+            
+            // Terapkan terrain provider ke scene
+            viewerRef.current.terrainProvider = terrainProvider;
+            console.log('Terrain berhasil dimuat');
+          } catch (error) {
+            console.error('Error saat memuat terrain:', error);
+          }
+        });
       } catch (error) {
-        console.error('Error loading terrain:', error);
-        setError('Gagal memuat terrain');
+        console.error('Error saat memuat terrain:', error);
       }
     };
     
@@ -108,6 +129,56 @@ function App() {
 
   const [clockViewModel] = useState(new ClockViewModel());
   const miniMapRef = useRef(null);
+
+  // Variabel untuk throttling
+  let lastSyncTime = 0;
+  const syncThrottleMs = 100; // Throttle ke 10 fps
+
+  const syncMiniMap = () => {
+    // Throttle update untuk mengurangi beban pada main thread
+    const now = Date.now();
+    if (now - lastSyncTime < syncThrottleMs) {
+      return;
+    }
+    lastSyncTime = now;
+    
+    if (!miniMapRef.current || !viewerRef.current) {
+      return;
+    }
+    
+    const mainViewer = viewerRef.current.cesiumElement;
+    const miniMapViewer = miniMapRef.current.cesiumElement;
+    
+    if (!mainViewer || !miniMapViewer) {
+      return;
+    }
+    
+    // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
+    requestAnimationFrame(() => {
+      try {
+        // Dapatkan posisi kamera utama
+        const cameraPosition = mainViewer.camera.position;
+        const ellipsoid = mainViewer.scene.globe.ellipsoid;
+        const cartographic = ellipsoid.cartesianToCartographic(cameraPosition);
+        
+        // Perbarui posisi kamera mini map
+        miniMapViewer.camera.setView({
+          destination: Cartesian3.fromRadians(
+            cartographic.longitude,
+            cartographic.latitude,
+            30000 // Ketinggian tetap untuk mini map
+          ),
+          orientation: {
+            heading: 0,
+            pitch: -Math.PI/2, // Lihat ke bawah
+            roll: 0
+          }
+        });
+      } catch (error) {
+        console.error('Error saat menyinkronkan mini map:', error);
+      }
+    });
+  };
 
   useEffect(() => {
     if (viewerRef.current?.cesiumElement && terrainProvider) {
@@ -165,30 +236,6 @@ function App() {
       miniViewer.scene.screenSpaceCameraController.enableTilt = false;
       miniViewer.scene.screenSpaceCameraController.enableLook = false;
 
-      const syncMiniMap = () => {
-        const viewCenter = new Cartesian2(
-          mainViewer.canvas.clientWidth / 2,
-          mainViewer.canvas.clientHeight / 2
-        );
-
-        const worldPosition = mainViewer.scene.camera.pickEllipsoid(viewCenter);
-        
-        if (defined(worldPosition)) {
-          const distance = Cartesian3.distance(
-            worldPosition,
-            mainViewer.scene.globe.ellipsoid.cartographicToCartesian(
-              mainViewer.camera.positionCartographic
-            )
-          );
-
-          miniViewer.camera.lookAt(
-            worldPosition,
-            new Cartesian3(0.0, 0.0, distance * 2)
-          );
-        }
-      };
-
-      mainViewer.camera.percentageChanged = 0.01;
       const cameraChangeListener = mainViewer.camera.changed.addEventListener(syncMiniMap);
       
       syncMiniMap();
@@ -221,210 +268,97 @@ function App() {
     }
   }, [viewerRef.current]); // Jalankan sekali saat viewer siap
 
-  // Pastikan fungsi addPointMarkers dipanggil setelah data outcrops berhasil diambil
+  // Tambahkan useEffect untuk memuat outcrops
   useEffect(() => {
     console.log('useEffect untuk loadOutcrops dipanggil');
     
-    // Gunakan variabel untuk melacak apakah komponen masih terpasang
-    let isMounted = true;
+    // Kita tidak perlu memanggil loadOutcrops lagi karena entity outcrops sudah ada di CesiumViewer.js
+    // Namun, kita tetap bisa mengambil data outcrops untuk keperluan lain jika diperlukan
     
-    const loadOutcrops = async () => {
-      try {
-        console.log('Mencoba mengambil data outcrops...');
-        const outcropsData = await fetchOutcrops();
-        
-        // Periksa apakah komponen masih terpasang sebelum memperbarui state
-        if (!isMounted) {
-          console.log('Komponen tidak lagi terpasang, membatalkan pemrosesan data outcrops');
-          return;
-        }
-        
-        console.log('Data outcrops berhasil diambil:', outcropsData);
-        
-        // Periksa struktur data yang dikembalikan oleh API
-        let outcropsArray = outcropsData;
-        
-        // Jika data dikembalikan dalam format {value: [...], Count: ...}
-        if (outcropsData && outcropsData.value && Array.isArray(outcropsData.value)) {
-          outcropsArray = outcropsData.value;
-          console.log('Menggunakan data outcrops dari properti value:', outcropsArray);
-        }
-        
-        // Tambahkan titik untuk setiap outcrop
-        if (outcropsArray && outcropsArray.length > 0) {
-          console.log('Memanggil addPointMarkers dengan data:', outcropsArray);
-          
-          // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
-          requestAnimationFrame(() => {
-            if (isMounted) {
-              addPointMarkers(outcropsArray);
-            }
-          });
-        } else {
-          console.warn('Tidak ada data outcrops yang ditemukan atau format data tidak sesuai'); 
-        }
-      } catch (error) {
-        console.error('Gagal mengambil data outcrops:', error);
-        
-        // Coba lagi setelah beberapa detik jika terjadi error
-        setTimeout(() => {
-          if (isMounted) {
-            console.log('Mencoba mengambil data outcrops lagi setelah error...');
-            loadOutcrops();
-          }
-        }, 5000);
-      }
-    };
-    
-    loadOutcrops();
-    
-    // Cleanup function untuk mencegah memory leak
-    return () => {
-      isMounted = false;
-    };
+    console.log('useEffect untuk loadOutcrops selesai');
   }, []);
 
-  // Modifikasi fungsi addPointMarkers untuk menerima data outcrops
-  const addPointMarkers = (outcrops) => {
-    if (!viewerRef.current?.cesiumElement) {
-      console.error('Viewer belum siap');
-      return;
-    }
+  // Fungsi untuk terbang ke posisi kamera
+  const flyToPosition = (cameraPosition) => {
+    if (!viewerRef.current) return;
     
     const viewer = viewerRef.current.cesiumElement;
     
-    // Hapus entity yang sudah ada jika perlu
-    viewer.entities.removeAll();
+    console.log('Terbang ke posisi kamera:', cameraPosition);
     
-    console.log('Menambahkan titik untuk outcrops:', outcrops);
-    
-    // Batasi jumlah entity yang ditambahkan dalam satu frame
-    // Gunakan setTimeout untuk menambahkan entity secara bertahap
-    const addEntitiesInBatches = (outcropsArray, batchSize = 5, startIndex = 0) => {
-      const endIndex = Math.min(startIndex + batchSize, outcropsArray.length);
-      const currentBatch = outcropsArray.slice(startIndex, endIndex);
-      
-      currentBatch.forEach(outcrop => {
-        try {
-          console.log('Memproses outcrop:', outcrop);
-          
-          // Periksa apakah outcrop memiliki properti coordinates
-          if (outcrop.coordinates) {
-            console.log('Menambahkan titik untuk outcrop:', outcrop.assetId, 'di koordinat:', outcrop.coordinates);
-            
-            // Gunakan billboard yang lebih sederhana untuk performa yang lebih baik
-            const entity = viewer.entities.add({
-              name: outcrop.description?.title || `Outcrop ${outcrop.assetId}`,
-              position: Cartesian3.fromDegrees(
-                outcrop.coordinates.longitude || 0, 
-                outcrop.coordinates.latitude || 0, 
-                outcrop.coordinates.height || 0
-              ),
-              point: {
-                pixelSize: 15,
-                color: Color.RED,
-                outlineColor: Color.WHITE,
-                outlineWidth: 2
-              }
-            });
-            console.log('Entity berhasil ditambahkan:', entity);
-          } else if (outcrop.longitude && outcrop.latitude) {
-            // Format alternatif jika koordinat langsung di objek utama
-            console.log('Menambahkan titik untuk outcrop dengan format alternatif:', outcrop.assetId || outcrop._id);
-            
-            const entity = viewer.entities.add({
-              name: outcrop.name || outcrop.description?.title || `Outcrop ${outcrop.assetId || outcrop._id}`,
-              position: Cartesian3.fromDegrees(
-                outcrop.longitude || 0, 
-                outcrop.latitude || 0, 
-                outcrop.height || 0
-              ),
-              point: {
-                pixelSize: 15,
-                color: Color.RED,
-                outlineColor: Color.WHITE,
-                outlineWidth: 2
-              }
-            });
-            console.log('Entity berhasil ditambahkan:', entity);
-          } else {
-            // Coba cari koordinat di tempat lain dalam objek
-            let foundCoordinates = false;
-            
-            // Cek jika ada properti position dengan longitude dan latitude
-            if (outcrop.position && outcrop.position.longitude && outcrop.position.latitude) {
-              console.log('Menemukan koordinat di properti position:', outcrop.position);
-              try {
-                const entity = viewer.entities.add({
-                  name: outcrop.name || outcrop.description?.title || `Outcrop ${outcrop.assetId || outcrop._id || ''}`,
-                  position: Cartesian3.fromDegrees(
-                    outcrop.position.longitude || 0, 
-                    outcrop.position.latitude || 0, 
-                    outcrop.position.height || 0
-                  ),
-                  point: {
-                    pixelSize: 15,
-                    color: Color.RED,
-                    outlineColor: Color.WHITE,
-                    outlineWidth: 2
-                  }
-                });
-                console.log('Entity berhasil ditambahkan dari properti position:', entity);
-                foundCoordinates = true;
-              } catch (error) {
-                console.error('Error saat menambahkan entity dari properti position:', error);
-              }
-            }
-            
-            if (!foundCoordinates) {
-              console.warn('Outcrop tidak memiliki properti koordinat yang valid:', outcrop);
-            }
+    // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
+    requestAnimationFrame(() => {
+      try {
+        // Ekstrak data posisi dan orientasi
+        const position = cameraPosition.position;
+        const orientation = cameraPosition.orientation;
+        
+        // Terbang ke posisi kamera
+        viewer.camera.flyTo({
+          destination: Cartesian3.fromDegrees(
+            position.longitude,
+            position.latitude,
+            position.height
+          ),
+          orientation: {
+            heading: CesiumMath.toRadians(orientation.heading || 0),
+            pitch: CesiumMath.toRadians(orientation.pitch || -45),
+            roll: orientation.roll || 0
+          },
+          duration: 2,
+          complete: function() {
+            console.log('Navigasi ke posisi kamera selesai');
           }
-        } catch (error) {
-          console.error('Error saat menambahkan titik untuk outcrop:', outcrop, error);
-        }
-      });
-      
-      // Jika masih ada entity yang perlu ditambahkan, jadwalkan batch berikutnya
-      if (endIndex < outcropsArray.length) {
-        setTimeout(() => {
-          addEntitiesInBatches(outcropsArray, batchSize, endIndex);
-        }, 0);
-      } else {
-        // Semua entity telah ditambahkan
-        console.log('Jumlah entity setelah menambahkan titik:', viewer.entities.values.length);
+        });
+      } catch (error) {
+        console.error('Error saat terbang ke posisi kamera:', error);
       }
-    };
-    
-    // Mulai menambahkan entity dalam batch
-    addEntitiesInBatches(outcrops);
+    });
   };
 
   // Tambahkan fungsi helper untuk navigasi home view
   const flyToHomeView = (duration = 2) => {
-    if (!viewerRef.current?.cesiumElement) return;
+    if (!viewerRef.current) return;
     
     const viewer = viewerRef.current.cesiumElement;
     
+    console.log('Terbang ke home view');
+    
     // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
     requestAnimationFrame(() => {
-      viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(
-          120.0,  // Longitude Indonesia
-          -2.0,   // Latitude Indonesia
-          5000000.0  // Ketinggian (meter)
-        ),
-        orientation: {
-          heading: CesiumMath.toRadians(0),
-          pitch: CesiumMath.toRadians(-90),
-          roll: 0
-        },
-        duration: duration,
-        // Tambahkan complete callback untuk mengurangi beban pada render
-        complete: () => {
-          console.log('Navigasi ke home view selesai');
-        }
-      });
+      try {
+        // Simpan kamera saat ini untuk animasi yang lebih halus
+        const currentPosition = viewer.camera.position.clone();
+        const currentHeading = viewer.camera.heading;
+        const currentPitch = viewer.camera.pitch;
+        
+        // Koordinat untuk Indonesia (Papua)
+        const longitude = 130.284065; // Koordinat OC1
+        const latitude = -2.029881;   // Koordinat OC1
+        const height = 500000;        // Ketinggian dalam meter
+        
+        console.log(`Terbang ke koordinat: ${longitude}, ${latitude}, ${height}`);
+        
+        // Gunakan flyTo dengan complete callback untuk mengurangi beban pada render
+        viewer.camera.flyTo({
+          destination: Cartesian3.fromDegrees(longitude, latitude, height),
+          orientation: {
+            heading: CesiumMath.toRadians(0),
+            pitch: CesiumMath.toRadians(-45),
+            roll: 0
+          },
+          duration: duration,
+          complete: function() {
+            console.log('Navigasi ke home view selesai');
+          },
+          easingFunction: function(time) {
+            // Fungsi easing yang lebih efisien
+            return time < 0.5 ? 2 * time * time : -1 + (4 - 2 * time) * time;
+          }
+        });
+      } catch (error) {
+        console.error('Error saat terbang ke home view:', error);
+      }
     });
   };
 
@@ -486,6 +420,48 @@ function App() {
     setShowPhotoMode(false);
   };
 
+  // Tambahkan fungsi debounce untuk event handler
+  const debounce = (func, wait) => {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  };
+
+  // Gunakan debounce untuk event handler yang sering dipanggil
+  const handleMouseMove = debounce((movement) => {
+    if (!viewerRef.current) return;
+    
+    // Implementasi handler mouse move
+  }, 50);
+
+  // Gunakan throttle untuk event handler yang sangat sering dipanggil
+  let lastRenderTime = 0;
+  const renderThrottleMs = 16; // Sekitar 60 fps
+
+  const onRenderHandler = () => {
+    const now = Date.now();
+    if (now - lastRenderTime < renderThrottleMs) {
+      return;
+    }
+    lastRenderTime = now;
+    
+    // Implementasi handler render
+  };
+
+  // Fungsi yang dipanggil ketika viewer siap
+  const handleViewerReady = (viewer) => {
+    console.log('Viewer siap');
+    
+    // Terbang ke home view
+    flyToHomeView(2);
+  };
+
   if (error) {
     return <div>Error: {error}</div>;
   }
@@ -514,7 +490,77 @@ function App() {
               TILESET_2={TILESET_2}
               showPhotoMode={showPhotoMode}
               onPhotoClick={handlePhotoClick}
-            />
+            >
+              <Entity
+                name="OC 1"
+                position={Cartesian3.fromDegrees(130.284065, -2.029881, 75.86)}
+                point={{
+                  pixelSize: 20,
+                  color: Color.RED,
+                  outlineColor: Color.WHITE,
+                  outlineWidth: 3,
+                  heightReference: HeightReference.CLAMP_TO_GROUND
+                }}
+                description="OC 1 - Pre - Tertiary Unit – Upper Jurassic Stratigraphy Unit – Lelinta Formation (23JUL01)"
+              />
+              <Entity
+                name="OC 2"
+                position={Cartesian3.fromDegrees(130.310587, -2.018613, 67.32)}
+                point={{
+                  pixelSize: 20,
+                  color: Color.RED,
+                  outlineColor: Color.WHITE,
+                  outlineWidth: 3,
+                  heightReference: HeightReference.CLAMP_TO_GROUND
+                }}
+                description="OC 2 - Pre - Tertiary Unit – Lower Cretaceous Stratigraphy Unit – Gamta Formation (23JLG01)"
+              />
+              
+              <ScreenSpaceEventHandler>
+                <ScreenSpaceEvent
+                  action={(click) => {
+                    const pickedObject = viewerRef.current.cesiumElement.scene.pick(click.position);
+                    console.log('Objek yang diklik:', pickedObject);
+                    
+                    if (defined(pickedObject) && pickedObject.id) {
+                      const entity = pickedObject.id;
+                      console.log('Entity yang diklik:', entity);
+                      
+                      if (entity.name === 'OC 1') {
+                        console.log('Entity OC 1 diklik');
+                        flyToPosition({
+                          position: {
+                            longitude: 130.284065,
+                            latitude: -2.029881,
+                            height: 75.86
+                          },
+                          orientation: {
+                            heading: 10,
+                            pitch: -45,
+                            roll: 0
+                          }
+                        });
+                      } else if (entity.name === 'OC 2') {
+                        console.log('Entity OC 2 diklik');
+                        flyToPosition({
+                          position: {
+                            longitude: 130.310587,
+                            latitude: -2.018613,
+                            height: 67.32
+                          },
+                          orientation: {
+                            heading: 30,
+                            pitch: -35,
+                            roll: 0
+                          }
+                        });
+                      }
+                    }
+                  }}
+                  type={ScreenSpaceEventType.LEFT_CLICK}
+                />
+              </ScreenSpaceEventHandler>
+            </CesiumViewer>
             
             {viewerRef.current?.cesiumElement && showCameraInfo && (
               <CameraVisualization 

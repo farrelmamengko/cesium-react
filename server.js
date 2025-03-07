@@ -190,11 +190,8 @@ app.get('/outcrops', async (req, res) => {
     // Log untuk debugging
     console.log('Data outcrops yang ditemukan:', outcrops);
     
-    // Kembalikan dalam format yang konsisten
-    res.json({
-      value: outcrops,
-      Count: outcrops.length
-    });
+    // Kembalikan dalam format array langsung, bukan dalam objek
+    res.json(outcrops);
   } catch (error) {
     console.error('Error mengambil outcrops:', error);
     res.status(500).json({
@@ -402,6 +399,40 @@ app.get('/tilesets', (req, res) => {
       message: 'Terjadi kesalahan saat mengambil tilesets',
       error: error.message
     });
+  }
+});
+
+// Endpoint untuk mendapatkan semua posisi kamera
+app.get('/camerapositions', async (req, res) => {
+  try {
+    console.log('Mengambil semua posisi kamera');
+    const cameraPositions = await Camera.find();
+    console.log(`Ditemukan ${cameraPositions.length} posisi kamera`);
+    res.json(cameraPositions);
+  } catch (error) {
+    console.error('Error saat mengambil posisi kamera:', error);
+    res.status(500).json({ error: 'Gagal mengambil posisi kamera' });
+  }
+});
+
+// Endpoint untuk mendapatkan posisi kamera berdasarkan outcropId
+app.get('/camerapositions/:outcropId', async (req, res) => {
+  try {
+    const { outcropId } = req.params;
+    console.log(`Mengambil posisi kamera untuk outcrop ${outcropId}`);
+    
+    const cameraPosition = await Camera.findOne({ outcropId });
+    
+    if (cameraPosition) {
+      console.log(`Posisi kamera untuk outcrop ${outcropId} ditemukan:`, cameraPosition);
+      res.json(cameraPosition);
+    } else {
+      console.log(`Tidak ada posisi kamera yang ditemukan untuk outcrop ${outcropId}`);
+      res.status(404).json({ error: 'Posisi kamera tidak ditemukan' });
+    }
+  } catch (error) {
+    console.error(`Error saat mengambil posisi kamera untuk outcrop ${req.params.outcropId}:`, error);
+    res.status(500).json({ error: 'Gagal mengambil posisi kamera' });
   }
 });
 
