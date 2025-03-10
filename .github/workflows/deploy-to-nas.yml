@@ -230,50 +230,46 @@ jobs:
         echo "Checking SSH port with netcat..."
         nc -zv ${{ secrets.NAS_HOST }} ${{ secrets.NAS_PORT }} -w 10 || echo "Port check failed with status $?"
         
-        # Buat file konfigurasi SSH khusus untuk mengatasi masalah banner
-        echo "Creating custom SSH config..."
-        cat > ~/.ssh/config << EOF
-        Host nas
-          HostName ${{ secrets.NAS_HOST }}
-          Port ${{ secrets.NAS_PORT }}
-          User ${{ secrets.NAS_USERNAME }}
-          StrictHostKeyChecking no
-          UserKnownHostsFile /dev/null
-          LogLevel DEBUG3
-          ConnectTimeout 30
-          ServerAliveInterval 15
-          ServerAliveCountMax 3
-          IdentitiesOnly yes
-          PubkeyAuthentication no
-          PreferredAuthentications password
-          KbdInteractiveAuthentication no
-          BatchMode no
-EOF
-        chmod 600 ~/.ssh/config
-        
-        # Coba koneksi dengan config khusus
-        echo "Attempting SSH connection with custom config..."
+        # Pendekatan yang sangat sederhana untuk SSH
+        echo "Attempting simple SSH connection..."
         export SSHPASS="$SSHPASS"
-        sshpass -e ssh -v nas 'echo "SSH connection successful"; hostname; whoami' || { 
-          echo "SSH connection failed with status $?"
+        
+        # Coba dengan opsi minimal
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"' || {
+          echo "Simple SSH connection failed, trying with different options..."
           
-          # Jika gagal, coba dengan opsi tambahan untuk mengatasi banner yang tidak standar
-          echo "Trying alternative connection method..."
-          sshpass -e ssh -v -o LogLevel=QUIET -o ConnectTimeout=60 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"; hostname; whoami' || {
-            echo "All SSH connection attempts failed"
-            exit 1
+          # Coba dengan opsi yang berbeda
+          sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=60 -o LogLevel=QUIET -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"' || {
+            echo "Second SSH attempt failed, trying with more options..."
+            
+            # Coba dengan opsi yang lebih spesifik
+            sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=60 -o LogLevel=QUIET -o KbdInteractiveAuthentication=no -o PreferredAuthentications=password -o PubkeyAuthentication=no -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"' || {
+              echo "All SSH connection attempts failed"
+              
+              # Tampilkan informasi debug tambahan
+              echo "Debug information:"
+              echo "NAS_HOST: ${{ secrets.NAS_HOST }}"
+              echo "NAS_PORT: ${{ secrets.NAS_PORT }}"
+              echo "NAS_USERNAME: ${{ secrets.NAS_USERNAME }}"
+              echo "Checking if host is reachable with different tools..."
+              curl -v telnet://${{ secrets.NAS_HOST }}:${{ secrets.NAS_PORT }} || echo "Curl telnet failed with status $?"
+              
+              exit 1
+            }
           }
         }
         
+        echo "SSH connection successful, proceeding with deployment..."
+        
         # Jika koneksi berhasil, lanjutkan dengan deployment
         echo "Copying deployment script..."
-        sshpass -e scp -v -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || { 
+        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || { 
           echo "SCP failed with status $?"
           exit 1
         }
         
         echo "Running deployment script..."
-        sshpass -e ssh -v -o LogLevel=QUIET -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash /tmp/deploy.sh" || { 
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash /tmp/deploy.sh" || { 
           echo "Deployment failed with status $?"
           exit 1
         }
