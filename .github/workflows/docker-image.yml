@@ -1,122 +1,106 @@
-name: Docker Build and Registry
+name: Deploy to NAS
 
 on:
   push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+    branches: [ main ]  # Sesuaikan dengan branch Anda (main atau master)
   workflow_dispatch:
 
-env:
-  DOCKER_REPOSITORY: cesium-react
-  DOCKER_IMAGE_TAG: ${{ github.sha }}
+permissions:
+  contents: read
+  packages: write  # Izin untuk push ke GitHub Container Registry
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
+    
     steps:
-    - uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
     
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
-      with:
-        driver: docker-container
-        buildkitd-flags: --allow-insecure-entitlement security.insecure --allow-insecure-entitlement network.host
     
-    - name: Login to Docker Hub
+    - name: Login to GitHub Container Registry
       uses: docker/login-action@v2
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Build and push
+    - name: Build and push Docker image
       uses: docker/build-push-action@v4
       with:
         context: .
         push: true
-        tags: ${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_REPOSITORY }}:${{ env.DOCKER_IMAGE_TAG }},${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_REPOSITORY }}:latest
-        build-args: |
-          MONGODB_URI=${{ secrets.MONGODB_URI }}
-          PORT=5001
-          REACT_APP_API_URL=${{ secrets.REACT_APP_API_URL }}
-        cache-from: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_REPOSITORY }}:buildcache
-        cache-to: type=registry,ref=${{ secrets.DOCKER_USERNAME }}/${{ env.DOCKER_REPOSITORY }}:buildcache,mode=max
-
-  deploy-staging:
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
+        tags: ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
     
-    - name: Install SSH client and sshpass
+    - name: Install SSH client, sshpass and netcat
       run: |
         sudo apt-get update
-        sudo apt-get install -y openssh-client sshpass
+        sudo apt-get install -y openssh-client sshpass netcat-openbsd
         mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
         ssh-keyscan -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_HOST }} >> ~/.ssh/known_hosts
+        chmod 600 ~/.ssh/known_hosts
     
     - name: Debug SSH Connection
       env:
         SSHPASS: ${{ secrets.NAS_PASSWORD }}
+      continue-on-error: true
       run: |
         echo "Checking SSH connection to NAS..."
         echo "Host: ${{ secrets.NAS_HOST }}"
         echo "Port: ${{ secrets.NAS_PORT }}"
         echo "Username: ${{ secrets.NAS_USERNAME }}"
         
-        # Cek koneksi dengan timeout yang lebih pendek
-        timeout 10 sshpass -e ssh -v -o StrictHostKeyChecking=no -o ConnectTimeout=5 -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection test"' || echo "SSH connection failed with status $?"
-        
         # Cek apakah port SSH terbuka
         echo "Checking if SSH port is open..."
-        nc -zv ${{ secrets.NAS_HOST }} ${{ secrets.NAS_PORT }} -w 5 || echo "Port check failed with status $?"
+        nc -z ${{ secrets.NAS_HOST }} ${{ secrets.NAS_PORT }} -w 10 || echo "Port check failed with status $?"
+        
+        # Cek koneksi SSH
+        echo "Testing SSH connection..."
+        sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection test"' || echo "SSH connection failed with status $?"
     
-    - name: Deploy to NAS
-      env:
-        SSHPASS: ${{ secrets.NAS_PASSWORD }}
+    - name: Create deployment script
       run: |
-        export SSHPASS="$SSHPASS"
+        # Simpan nilai repository untuk digunakan dalam script
+        REPO="${{ github.repository_owner }}/${{ github.event.repository.name }}"
         
-        # Gunakan opsi SSH tambahan untuk mengatasi masalah banner
-        SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -o LogLevel=DEBUG3"
-        
-        echo "Attempting SSH connection with enhanced options..."
-        sshpass -e ssh $SSH_OPTS -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"' || echo "SSH connection failed with status $?"
-        
-        # Buat script deployment
-        cat > deploy.sh << 'EOL'
+        cat > deploy.sh << EOL
         #!/bin/bash
         
-        echo "Starting deployment as user: $(whoami)"
-        echo "Current directory: $(pwd)"
+        echo "Starting deployment as user: \$(whoami)"
+        echo "Current directory: \$(pwd)"
         
-        # Change to project directory
+        # Variabel yang diterima dari GitHub Actions
+        GITHUB_REPOSITORY="${REPO}"
+        NAS_HOST="\${NAS_HOST}"
+        
+        # Buat direktori jika belum ada
+        mkdir -p /volume1/docker/cesium-react
         cd /volume1/docker/cesium-react
-        if [ $? -ne 0 ]; then
-          echo "Failed to change directory, creating it..."
-          mkdir -p /volume1/docker/cesium-react
-          cd /volume1/docker/cesium-react
-        fi
         
-        # Create uploads directory if it doesn't exist
+        # Buat direktori uploads jika belum ada
         mkdir -p uploads
         
         # Set default Docker command
         docker_cmd="/usr/local/bin/docker"
         
         # Check if default path exists, if not try alternatives
-        if [ ! -x "$docker_cmd" ]; then
+        if [ ! -x "\$docker_cmd" ]; then
           for cmd in "/volume1/@appstore/Docker/usr/bin/docker" "/usr/bin/docker"; do
-            if [ -x "$cmd" ]; then
-              docker_cmd="$cmd"
-              echo "Found Docker at $docker_cmd"
+            if [ -x "\$cmd" ]; then
+              docker_cmd="\$cmd"
+              echo "Found Docker at \$docker_cmd"
               break
             fi
           done
         fi
         
         # Verify Docker was found
-        if [ ! -x "$docker_cmd" ]; then
+        if [ ! -x "\$docker_cmd" ]; then
           echo "Docker not found in any expected location"
           exit 1
         fi
@@ -124,110 +108,125 @@ jobs:
         # Check if docker-compose exists
         compose_cmd=""
         for cmd in "/usr/local/bin/docker-compose" "/volume1/@appstore/Docker/usr/bin/docker-compose" "/usr/bin/docker-compose"; do
-          if [ -x "$cmd" ]; then
-            compose_cmd="$cmd"
-            echo "Found Docker Compose at $compose_cmd"
+          if [ -x "\$cmd" ]; then
+            compose_cmd="\$cmd"
+            echo "Found Docker Compose at \$compose_cmd"
             break
           fi
         done
         
-        # Create or update docker-compose.yml file
-        cat > docker-compose.yml << 'EOF'
+        # Login ke GitHub Container Registry
+        echo "\${GITHUB_TOKEN}" | \$docker_cmd login ghcr.io -u "\${GITHUB_ACTOR}" --password-stdin
+        
+        # Pull image terbaru
+        \$docker_cmd pull ghcr.io/\${GITHUB_REPOSITORY}:latest
+        
+        # Buat atau perbarui docker-compose.yml
+        cat > docker-compose.yml << EOF
         version: '3'
         
         services:
           app:
-            image: ${DOCKER_USERNAME}/cesium-react:latest
+            image: ghcr.io/\${GITHUB_REPOSITORY}:latest
             container_name: cesium-react-app
-            restart: always
             ports:
               - "5001:5001"
             environment:
               - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
               - PORT=5001
-              - REACT_APP_API_URL=http://${NAS_HOST}:5001
+              - REACT_APP_API_URL=http://\${NAS_HOST}:5001
             volumes:
               - ./uploads:/app/uploads
             depends_on:
               - mongodb
-        
+            restart: unless-stopped
+          
           mongodb:
             image: mongo:6
             container_name: cesium-react-mongodb
-            restart: always
             ports:
               - "27018:27017"
             volumes:
               - mongodb_data:/data/db
               - ./mongo-seed:/mongo-seed
+            restart: unless-stopped
         
         volumes:
           mongodb_data:
         EOF
         
-        # Ganti variabel di docker-compose.yml
-        sed -i "s|\${DOCKER_USERNAME}|${DOCKER_USERNAME}|g" docker-compose.yml
-        sed -i "s|\${NAS_HOST}|${NAS_HOST}|g" docker-compose.yml
-        
         echo "Created docker-compose.yml file"
         
-        # Stop and remove existing containers if running
-        echo "Stopping existing containers if running..."
-        $docker_cmd stop cesium-react-app 2>/dev/null || true
-        $docker_cmd rm cesium-react-app 2>/dev/null || true
-        $docker_cmd stop cesium-react-mongodb 2>/dev/null || true
-        $docker_cmd rm cesium-react-mongodb 2>/dev/null || true
-        
-        # Pull the latest image
-        echo "Pulling latest image..."
-        $docker_cmd pull ${DOCKER_USERNAME}/cesium-react:latest
-        
-        # Try using docker-compose if available
-        if [ -n "$compose_cmd" ]; then
+        # Restart containers menggunakan docker-compose jika tersedia
+        if [ -n "\$compose_cmd" ]; then
           echo "Using Docker Compose for deployment..."
-          $compose_cmd down
-          $compose_cmd up -d
+          \$compose_cmd down
+          \$compose_cmd up -d
         else
-          # Fallback to using docker run directly
-          echo "Using Docker run for deployment..."
+          # Fallback ke docker run jika docker-compose tidak tersedia
+          echo "Docker Compose not found, using Docker run instead..."
           
-          # Create a network for the containers
-          $docker_cmd network create cesium-network 2>/dev/null || true
+          # Stop dan hapus container yang sudah ada
+          \$docker_cmd stop cesium-react-app 2>/dev/null || true
+          \$docker_cmd rm cesium-react-app 2>/dev/null || true
+          \$docker_cmd stop cesium-react-mongodb 2>/dev/null || true
+          \$docker_cmd rm cesium-react-mongodb 2>/dev/null || true
           
-          # Run MongoDB container
-          $docker_cmd run -d \
-            --name cesium-react-mongodb \
-            --network cesium-network \
-            --restart always \
-            -p 27018:27017 \
-            -v mongodb_data:/data/db \
-            -v "$(pwd)/mongo-seed:/mongo-seed" \
+          # Buat network
+          \$docker_cmd network create cesium-network 2>/dev/null || true
+          
+          # Jalankan MongoDB
+          \$docker_cmd run -d \\
+            --name cesium-react-mongodb \\
+            --network cesium-network \\
+            --restart unless-stopped \\
+            -p 27018:27017 \\
+            -v mongodb_data:/data/db \\
+            -v "\$(pwd)/mongo-seed:/mongo-seed" \\
             mongo:6
           
-          # Run app container
-          $docker_cmd run -d \
-            --name cesium-react-app \
-            --network cesium-network \
-            --restart always \
-            -p 5001:5001 \
-            -e MONGODB_URI="mongodb://cesium-react-mongodb:27017/belajaroutcrop-db" \
-            -e PORT="5001" \
-            -e REACT_APP_API_URL="http://${NAS_HOST}:5001" \
-            -v "$(pwd)/uploads:/app/uploads" \
-            --link cesium-react-mongodb:mongodb \
-            ${DOCKER_USERNAME}/cesium-react:latest
+          # Jalankan aplikasi
+          \$docker_cmd run -d \\
+            --name cesium-react-app \\
+            --network cesium-network \\
+            --restart unless-stopped \\
+            -p 5001:5001 \\
+            -e MONGODB_URI="mongodb://cesium-react-mongodb:27017/belajaroutcrop-db" \\
+            -e PORT="5001" \\
+            -e REACT_APP_API_URL="http://\${NAS_HOST}:5001" \\
+            -v "\$(pwd)/uploads:/app/uploads" \\
+            --link cesium-react-mongodb:mongodb \\
+            ghcr.io/\${GITHUB_REPOSITORY}:latest
         fi
         
+        # Bersihkan image yang tidak digunakan
+        \$docker_cmd image prune -f
+        
         echo "Deployment completed successfully"
-        echo "Application should be available at http://${NAS_HOST}:5001"
+        echo "Application should be available at http://\${NAS_HOST}:5001"
         EOL
         
         chmod +x deploy.sh
+    
+    - name: Deploy to NAS using sshpass
+      env:
+        SSHPASS: ${{ secrets.NAS_PASSWORD }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_ACTOR: ${{ github.actor }}
+      continue-on-error: true
+      run: |
+        # Tambahkan opsi debug untuk melihat masalah koneksi
+        export SSHPASS="$SSHPASS"
         
-        # Kirim script ke NAS
+        # Gunakan opsi SSH yang lebih sederhana
+        SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30"
+        
+        echo "Attempting SSH connection..."
+        sshpass -e ssh $SSH_OPTS -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"' || echo "SSH connection failed with status $?"
+        
+        # Jika koneksi berhasil, lanjutkan dengan deployment
         echo "Copying deployment script..."
-        sshpass -e scp -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || echo "SCP failed with status $?"
+        sshpass -e scp -P ${{ secrets.NAS_PORT }} -o StrictHostKeyChecking=no deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || echo "SCP failed with status $?"
         
-        # Jalankan script di NAS
         echo "Running deployment script..."
-        sshpass -e ssh $SSH_OPTS -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export DOCKER_USERNAME='${{ secrets.DOCKER_USERNAME }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash /tmp/deploy.sh" || echo "Deployment failed with status $?" 
+        sshpass -e ssh $SSH_OPTS -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository_owner }}/${{ github.event.repository.name }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash /tmp/deploy.sh" || echo "Deployment failed with status $?" 
