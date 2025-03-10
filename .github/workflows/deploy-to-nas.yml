@@ -40,50 +40,132 @@ jobs:
         password: ${{ secrets.NAS_PASSWORD }}
         port: ${{ secrets.NAS_PORT }}
         script: |
+          echo "Starting deployment as user: $(whoami)"
+          echo "Current directory: $(pwd)"
+          
           # Buat direktori jika belum ada
           mkdir -p /volume1/docker/cesium-react
-          
-          # Salin file konfigurasi ke NAS
           cd /volume1/docker/cesium-react
           
+          # Buat direktori uploads jika belum ada
+          mkdir -p uploads
+          
+          # Set default Docker command
+          docker_cmd="/usr/local/bin/docker"
+          
+          # Check if default path exists, if not try alternatives
+          if [ ! -x "$docker_cmd" ]; then
+            for cmd in "/volume1/@appstore/Docker/usr/bin/docker" "/usr/bin/docker"; do
+              if [ -x "$cmd" ]; then
+                docker_cmd="$cmd"
+                echo "Found Docker at $docker_cmd"
+                break
+              fi
+            done
+          fi
+          
+          # Verify Docker was found
+          if [ ! -x "$docker_cmd" ]; then
+            echo "Docker not found in any expected location"
+            exit 1
+          fi
+          
+          # Check if docker-compose exists
+          compose_cmd=""
+          for cmd in "/usr/local/bin/docker-compose" "/volume1/@appstore/Docker/usr/bin/docker-compose" "/usr/bin/docker-compose"; do
+            if [ -x "$cmd" ]; then
+              compose_cmd="$cmd"
+              echo "Found Docker Compose at $compose_cmd"
+              break
+            fi
+          done
+          
           # Login ke GitHub Container Registry
-          echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo ${{ secrets.GITHUB_TOKEN }} | $docker_cmd login ghcr.io -u ${{ github.actor }} --password-stdin
           
           # Pull image terbaru
-          docker pull ghcr.io/${{ github.repository }}:latest
+          $docker_cmd pull ghcr.io/${{ github.repository }}:latest
           
           # Buat atau perbarui docker-compose.yml
           cat > docker-compose.yml << 'EOL'
+          version: '3'
+          
           services:
             app:
               image: ghcr.io/${{ github.repository }}:latest
+              container_name: cesium-react-app
               ports:
-                - "5001:5001"
+                - "5004:5004"
               environment:
                 - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
-                - PORT=5001
-                - REACT_APP_API_URL=http://${{ secrets.NAS_HOST }}:5001
+                - PORT=5004
+                - REACT_APP_API_URL=http://${{ secrets.NAS_HOST }}:5004
               volumes:
                 - ./uploads:/app/uploads
-                - ./build:/app/build
               depends_on:
                 - mongodb
               restart: unless-stopped
+            
             mongodb:
               image: mongo:6
+              container_name: cesium-react-mongodb
               ports:
                 - "27018:27017"
               volumes:
                 - mongodb_data:/data/db
                 - ./mongo-seed:/mongo-seed
               restart: unless-stopped
+          
           volumes:
             mongodb_data:
           EOL
           
-          # Restart containers
-          docker-compose down
-          docker-compose up -d
+          echo "Created docker-compose.yml file"
+          
+          # Restart containers menggunakan docker-compose jika tersedia
+          if [ -n "$compose_cmd" ]; then
+            echo "Using Docker Compose for deployment..."
+            $compose_cmd down
+            $compose_cmd up -d
+          else
+            # Fallback ke docker run jika docker-compose tidak tersedia
+            echo "Docker Compose not found, using Docker run instead..."
+            
+            # Stop dan hapus container yang sudah ada
+            $docker_cmd stop cesium-react-app 2>/dev/null || true
+            $docker_cmd rm cesium-react-app 2>/dev/null || true
+            $docker_cmd stop cesium-react-mongodb 2>/dev/null || true
+            $docker_cmd rm cesium-react-mongodb 2>/dev/null || true
+            
+            # Buat network
+            $docker_cmd network create cesium-network 2>/dev/null || true
+            
+            # Jalankan MongoDB
+            $docker_cmd run -d \
+              --name cesium-react-mongodb \
+              --network cesium-network \
+              --restart unless-stopped \
+              -p 27018:27017 \
+              -v mongodb_data:/data/db \
+              -v "$(pwd)/mongo-seed:/mongo-seed" \
+              mongo:6
+            
+            # Jalankan aplikasi
+            $docker_cmd run -d \
+              --name cesium-react-app \
+              --network cesium-network \
+              --restart unless-stopped \
+              -p 5004:5004 \
+              -e MONGODB_URI="mongodb://cesium-react-mongodb:27017/belajaroutcrop-db" \
+              -e PORT="5004" \
+              -e REACT_APP_API_URL="http://${{ secrets.NAS_HOST }}:5004" \
+              -v "$(pwd)/uploads:/app/uploads" \
+              --link cesium-react-mongodb:mongodb \
+              ghcr.io/${{ github.repository }}:latest
+          fi
           
           # Bersihkan image yang tidak digunakan
-          docker image prune -f
+          $docker_cmd image prune -f
+          
+          echo "Deployment completed successfully"
+          echo "Application should be available at http://${{ secrets.NAS_HOST }}:5004"
