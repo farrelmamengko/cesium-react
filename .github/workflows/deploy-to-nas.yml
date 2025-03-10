@@ -315,7 +315,7 @@ jobs:
           \$docker_cmd pull ghcr.io/${GITHUB_REPOSITORY}:latest
           
           # Buat atau perbarui docker-compose.yml
-          cat > docker-compose.yml << 'EOF'
+          cat > docker-compose.yml << 'EOFMARKER'
 version: '3'
 
 services:
@@ -346,7 +346,7 @@ services:
 
 volumes:
   mongodb_data:
-EOF
+EOFMARKER
           
           # Ganti variabel di docker-compose.yml
           sed -i \"s|\\\${GITHUB_REPOSITORY}|${GITHUB_REPOSITORY}|g\" docker-compose.yml
