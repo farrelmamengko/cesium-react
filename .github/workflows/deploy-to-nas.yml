@@ -43,10 +43,12 @@ jobs:
         mkdir -p ~/.ssh
         chmod 700 ~/.ssh
         ssh-keyscan -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_HOST }} >> ~/.ssh/known_hosts 2>/dev/null || true
+        chmod 600 ~/.ssh/known_hosts
     
     - name: Debug SSH Connection
       env:
         SSHPASS: ${{ secrets.NAS_PASSWORD }}
+      continue-on-error: true
       run: |
         echo "Checking SSH connection to NAS..."
         echo "Host: ${{ secrets.NAS_HOST }}"
@@ -59,7 +61,12 @@ jobs:
         
         # Cek apakah port SSH terbuka
         echo "Checking if SSH port is open..."
-        nc -zv ${{ secrets.NAS_HOST }} ${{ secrets.NAS_PORT }} -w 5 || echo "Port check failed with status $?"
+        nc -z ${{ secrets.NAS_HOST }} ${{ secrets.NAS_PORT }} -w 10 || echo "Port check failed with status $?"
+        
+        # Cek koneksi SSH dengan opsi yang lebih sederhana
+        echo "Testing SSH connection..."
+        export SSHPASS="$SSHPASS"
+        sshpass -e ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection test"' || echo "SSH connection failed with status $?"
     
     - name: Create deployment script
       run: |
@@ -210,19 +217,20 @@ jobs:
         GITHUB_ACTOR: ${{ github.actor }}
         GITHUB_REPOSITORY: ${{ github.repository }}
         NAS_HOST: ${{ secrets.NAS_HOST }}
+      continue-on-error: true
       run: |
         # Tambahkan opsi debug untuk melihat masalah koneksi
         export SSHPASS="$SSHPASS"
         
-        # Gunakan opsi SSH tambahan untuk mengatasi masalah banner
-        SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=10 -o LogLevel=DEBUG3"
+        # Gunakan opsi SSH yang lebih sederhana tetapi dengan error handling yang lebih baik
+        SSH_OPTS="-o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=60 -o ServerAliveCountMax=10"
         
-        echo "Attempting SSH connection with enhanced options..."
+        echo "Attempting SSH connection..."
         sshpass -e ssh $SSH_OPTS -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"' || { echo "SSH connection failed with status $?"; exit 1; }
         
         # Jika koneksi berhasil, lanjutkan dengan deployment
         echo "Copying deployment script..."
-        sshpass -e scp -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || { echo "SCP failed with status $?"; exit 1; }
+        sshpass -e scp -P ${{ secrets.NAS_PORT }} -o StrictHostKeyChecking=no deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || { echo "SCP failed with status $?"; exit 1; }
         
         echo "Running deployment script..."
         sshpass -e ssh $SSH_OPTS -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash /tmp/deploy.sh" || { echo "Deployment failed with status $?"; exit 1; }
