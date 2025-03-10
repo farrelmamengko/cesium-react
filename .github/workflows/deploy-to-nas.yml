@@ -263,17 +263,145 @@ jobs:
         
         # Periksa direktori home pengguna dan izin
         echo "Checking user home directory and permissions..."
-        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "Home directory: $HOME"; ls -la $HOME; mkdir -p $HOME/deploy || echo "Failed to create directory"'
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "Home directory: $HOME"; ls -la $HOME; echo "Checking write permissions..."; touch $HOME/test_write_permission && echo "Write permission OK" && rm $HOME/test_write_permission || echo "No write permission"'
         
-        # Jika koneksi berhasil, lanjutkan dengan deployment ke direktori home pengguna
-        echo "Copying deployment script to home directory..."
-        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:~/deploy.sh || { 
-          echo "SCP failed with status $?"
-          exit 1
-        }
-        
-        echo "Running deployment script..."
-        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash ~/deploy.sh" || { 
+        # Coba pendekatan baru: jalankan perintah langsung melalui SSH tanpa menyalin file
+        echo "Executing deployment commands directly via SSH..."
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "
+          echo 'Starting deployment as user: \$(whoami)'
+          echo 'Current directory: \$(pwd)'
+          
+          # Buat direktori jika belum ada
+          mkdir -p /volume1/docker/cesium-react || { echo 'Failed to create directory /volume1/docker/cesium-react'; exit 1; }
+          cd /volume1/docker/cesium-react || { echo 'Failed to change directory'; exit 1; }
+          
+          # Buat direktori uploads jika belum ada
+          mkdir -p uploads || { echo 'Failed to create uploads directory'; exit 1; }
+          
+          # Set default Docker command
+          docker_cmd='/usr/local/bin/docker'
+          
+          # Check if default path exists, if not try alternatives
+          if [ ! -x \"\$docker_cmd\" ]; then
+            for cmd in '/volume1/@appstore/Docker/usr/bin/docker' '/usr/bin/docker'; do
+              if [ -x \"\$cmd\" ]; then
+                docker_cmd=\"\$cmd\"
+                echo \"Found Docker at \$docker_cmd\"
+                break
+              fi
+            done
+          fi
+          
+          # Verify Docker was found
+          if [ ! -x \"\$docker_cmd\" ]; then
+            echo 'Docker not found in any expected location'
+            exit 1
+          fi
+          
+          # Check if docker-compose exists
+          compose_cmd=''
+          for cmd in '/usr/local/bin/docker-compose' '/volume1/@appstore/Docker/usr/bin/docker-compose' '/usr/bin/docker-compose'; do
+            if [ -x \"\$cmd\" ]; then
+              compose_cmd=\"\$cmd\"
+              echo \"Found Docker Compose at \$compose_cmd\"
+              break
+            fi
+          done
+          
+          # Login ke GitHub Container Registry
+          echo \"${GITHUB_TOKEN}\" | \$docker_cmd login ghcr.io -u \"${GITHUB_ACTOR}\" --password-stdin
+          
+          # Pull image terbaru
+          \$docker_cmd pull ghcr.io/${GITHUB_REPOSITORY}:latest
+          
+          # Buat atau perbarui docker-compose.yml
+          cat > docker-compose.yml << 'EOF'
+version: '3'
+
+services:
+  app:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    container_name: cesium-react-app
+    ports:
+      - \"5001:5001\"
+    environment:
+      - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
+      - PORT=5001
+      - REACT_APP_API_URL=http://${NAS_HOST}:5001
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - mongodb
+    restart: unless-stopped
+  
+  mongodb:
+    image: mongo:6
+    container_name: cesium-react-mongodb
+    ports:
+      - \"27018:27017\"
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongo-seed:/mongo-seed
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:
+EOF
+          
+          # Ganti variabel di docker-compose.yml
+          sed -i \"s|\\\${GITHUB_REPOSITORY}|${GITHUB_REPOSITORY}|g\" docker-compose.yml
+          sed -i \"s|\\\${NAS_HOST}|${NAS_HOST}|g\" docker-compose.yml
+          
+          echo 'Created docker-compose.yml file'
+          
+          # Restart containers menggunakan docker-compose jika tersedia
+          if [ -n \"\$compose_cmd\" ]; then
+            echo 'Using Docker Compose for deployment...'
+            \$compose_cmd down
+            \$compose_cmd up -d
+          else
+            # Fallback ke docker run jika docker-compose tidak tersedia
+            echo 'Docker Compose not found, using Docker run instead...'
+            
+            # Stop dan hapus container yang sudah ada
+            \$docker_cmd stop cesium-react-app 2>/dev/null || true
+            \$docker_cmd rm cesium-react-app 2>/dev/null || true
+            \$docker_cmd stop cesium-react-mongodb 2>/dev/null || true
+            \$docker_cmd rm cesium-react-mongodb 2>/dev/null || true
+            
+            # Buat network
+            \$docker_cmd network create cesium-network 2>/dev/null || true
+            
+            # Jalankan MongoDB
+            \$docker_cmd run -d \\
+              --name cesium-react-mongodb \\
+              --network cesium-network \\
+              --restart unless-stopped \\
+              -p 27018:27017 \\
+              -v mongodb_data:/data/db \\
+              -v \"\$(pwd)/mongo-seed:/mongo-seed\" \\
+              mongo:6
+            
+            # Jalankan aplikasi
+            \$docker_cmd run -d \\
+              --name cesium-react-app \\
+              --network cesium-network \\
+              --restart unless-stopped \\
+              -p 5001:5001 \\
+              -e MONGODB_URI=\"mongodb://cesium-react-mongodb:27017/belajaroutcrop-db\" \\
+              -e PORT=\"5001\" \\
+              -e REACT_APP_API_URL=\"http://${NAS_HOST}:5001\" \\
+              -v \"\$(pwd)/uploads:/app/uploads\" \\
+              --link cesium-react-mongodb:mongodb \\
+              ghcr.io/${GITHUB_REPOSITORY}:latest
+          fi
+          
+          # Bersihkan image yang tidak digunakan
+          \$docker_cmd image prune -f
+          
+          echo 'Deployment completed successfully'
+          echo 'Application should be available at http://${NAS_HOST}:5001'
+        " || { 
           echo "Deployment failed with status $?"
           exit 1
         }
