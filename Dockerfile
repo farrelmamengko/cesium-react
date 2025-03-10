@@ -1,5 +1,5 @@
 # Stage 1: Build aplikasi
-FROM node:18-alpine AS builder
+FROM node:16 as build
 
 # Set working directory
 WORKDIR /app
@@ -8,7 +8,7 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies
-RUN npm ci
+RUN npm install
 
 # Copy seluruh kode sumber
 COPY . .
@@ -17,28 +17,23 @@ COPY . .
 RUN npm run build
 
 # Stage 2: Production image
-FROM node:18-alpine
+FROM nginx:alpine
 
-# Set working directory
-WORKDIR /app
-
-# Copy package files
-COPY package*.json ./
-
-# Install production dependencies only
-RUN npm ci --only=production
+# Buat konfigurasi Nginx untuk mendengarkan port 5001
+RUN echo 'server { \
+    listen 5001; \
+    location / { \
+        root /usr/share/nginx/html; \
+        index index.html index.htm; \
+        try_files $uri $uri/ /index.html; \
+    } \
+}' > /etc/nginx/conf.d/default.conf
 
 # Copy build dari stage sebelumnya
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/server.js ./
-COPY --from=builder /app/models ./models
-COPY --from=builder /app/routes ./routes
-
-# Buat direktori uploads jika belum ada
-RUN mkdir -p uploads
+COPY --from=build /app/build /usr/share/nginx/html
 
 # Expose port yang digunakan server
-EXPOSE 5004
+EXPOSE 5001
 
 # Command untuk menjalankan server
-CMD ["node", "server.js"] 
+CMD ["nginx", "-g", "daemon off;"] 
