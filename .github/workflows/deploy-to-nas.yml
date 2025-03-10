@@ -261,15 +261,19 @@ jobs:
         
         echo "SSH connection successful, proceeding with deployment..."
         
-        # Jika koneksi berhasil, lanjutkan dengan deployment
-        echo "Copying deployment script..."
-        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/ || { 
+        # Periksa direktori home pengguna dan izin
+        echo "Checking user home directory and permissions..."
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "Home directory: $HOME"; ls -la $HOME; mkdir -p $HOME/deploy || echo "Failed to create directory"'
+        
+        # Jika koneksi berhasil, lanjutkan dengan deployment ke direktori home pengguna
+        echo "Copying deployment script to home directory..."
+        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:~/deploy.sh || { 
           echo "SCP failed with status $?"
           exit 1
         }
         
         echo "Running deployment script..."
-        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash /tmp/deploy.sh" || { 
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "export GITHUB_TOKEN='${{ secrets.GITHUB_TOKEN }}' GITHUB_ACTOR='${{ github.actor }}' GITHUB_REPOSITORY='${{ github.repository }}' NAS_HOST='${{ secrets.NAS_HOST }}' && bash ~/deploy.sh" || { 
           echo "Deployment failed with status $?"
           exit 1
         }
