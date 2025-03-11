@@ -19,9 +19,9 @@ RUN npm run build
 # Stage 2: Production image
 FROM nginx:alpine
 
-# Buat konfigurasi Nginx untuk mendengarkan port 5001
+# Buat konfigurasi Nginx untuk mendengarkan port 5004
 RUN echo 'server { \
-    listen 5001; \
+    listen 5004; \
     location / { \
         root /usr/share/nginx/html; \
         index index.html index.htm; \
@@ -33,7 +33,7 @@ RUN echo 'server { \
 COPY --from=build /app/build /usr/share/nginx/html
 
 # Expose port yang digunakan server
-EXPOSE 5001
+EXPOSE 5004
 
 # Command untuk menjalankan server
 CMD ["nginx", "-g", "daemon off;"] 

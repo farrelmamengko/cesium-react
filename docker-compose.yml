@@ -6,7 +6,7 @@ services:
     environment:
       - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
       - PORT=5004
-      - REACT_APP_API_URL=http://localhost:5004
+      - REACT_APP_API_URL=http://203.153.109.226:5004
     volumes:
       - ./uploads:/app/uploads
       - ./build:/app/build
