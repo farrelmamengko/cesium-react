@@ -10,9 +10,12 @@ services:
     volumes:
       - ./uploads:/app/uploads
       - ./build:/app/build
+      - ./terrain-cache:/app/terrain-cache
     depends_on:
       - mongodb
     restart: unless-stopped
+    networks:
+      - cesium-network
 
   mongodb:
     image: mongo:6
@@ -22,6 +25,12 @@ services:
       - mongodb_data:/data/db
       - ./mongo-seed:/mongo-seed
     restart: unless-stopped
+    networks:
+      - cesium-network
+
+networks:
+  cesium-network:
+    driver: bridge
 
 volumes:
   mongodb_data: 
