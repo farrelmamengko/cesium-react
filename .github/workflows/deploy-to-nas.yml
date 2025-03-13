@@ -80,8 +80,10 @@ jobs:
         mkdir -p /volume1/docker/cesium-react
         cd /volume1/docker/cesium-react
         
-        # Buat direktori uploads jika belum ada
+        # Buat direktori uploads dan terrain-cache jika belum ada
         mkdir -p uploads
+        mkdir -p terrain-cache
+        mkdir -p build
         
         # Set default Docker command
         docker_cmd="/usr/local/bin/docker"
@@ -123,19 +125,22 @@ jobs:
         cat > docker-compose.yml << 'EOF'
         services:
           app:
-            build: .
+            image: ghcr.io/${GITHUB_REPOSITORY}:latest
             ports:
-              - "5004:5004"
+              - "8080:8080"
             environment:
               - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
-              - PORT=5004
-              - REACT_APP_API_URL=http://203.153.109.226:5004
+              - PORT=8080
+              - REACT_APP_API_URL=http://203.153.109.226:8080
             volumes:
               - ./uploads:/app/uploads
               - ./build:/app/build
+              - ./terrain-cache:/app/terrain-cache
             depends_on:
               - mongodb
             restart: unless-stopped
+            networks:
+              - cesium-network
           
           mongodb:
             image: mongo:6
@@ -145,9 +150,15 @@ jobs:
               - mongodb_data:/data/db
               - ./mongo-seed:/mongo-seed
             restart: unless-stopped
+            networks:
+              - cesium-network
         
         volumes:
           mongodb_data:
+        
+        networks:
+          cesium-network:
+            driver: bridge
         EOF
         
         # Ganti variabel di docker-compose.yml
@@ -155,6 +166,15 @@ jobs:
         sed -i "s|\${NAS_HOST}|${NAS_HOST}|g" docker-compose.yml
         
         echo "Created docker-compose.yml file"
+        
+        # Buat file .env.production
+        cat > .env.production << 'EOF'
+        MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
+        PORT=8080
+        REACT_APP_API_URL=http://203.153.109.226:8080
+        EOF
+        
+        echo "Created .env.production file"
         
         # Restart containers menggunakan docker-compose jika tersedia
         if [ -n "$compose_cmd" ]; then
@@ -189,11 +209,13 @@ jobs:
             --name cesium-react-app \
             --network cesium-network \
             --restart unless-stopped \
-            -p 5001:5001 \
+            -p 8080:8080 \
             -e MONGODB_URI="mongodb://cesium-react-mongodb:27017/belajaroutcrop-db" \
-            -e PORT="5001" \
-            -e REACT_APP_API_URL="http://${NAS_HOST}:5001" \
+            -e PORT="8080" \
+            -e REACT_APP_API_URL="http://${NAS_HOST}:8080" \
             -v "$(pwd)/uploads:/app/uploads" \
+            -v "$(pwd)/build:/app/build" \
+            -v "$(pwd)/terrain-cache:/app/terrain-cache" \
             --link cesium-react-mongodb:mongodb \
             ghcr.io/${GITHUB_REPOSITORY}:latest
         fi
@@ -202,7 +224,7 @@ jobs:
         $docker_cmd image prune -f
         
         echo "Deployment completed successfully"
-        echo "Application should be available at http://${NAS_HOST}:5001"
+        echo "Application should be available at http://${NAS_HOST}:8080"
         EOL
         
         chmod +x deploy.sh
@@ -221,24 +243,17 @@ jobs:
         echo "Attempting SSH connection..."
         sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"'
         
-        # Jalankan perintah deployment langsung melalui SSH
-        echo "Executing deployment commands directly via SSH..."
+        # Upload script deployment ke NAS
+        echo "Uploading deployment script to NAS..."
+        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/deploy.sh
+        
+        # Jalankan script deployment di NAS
+        echo "Running deployment script on NAS..."
         sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "
-          # Buat direktori di lokasi yang memiliki izin tulis
-          mkdir -p /tmp/cesium-deploy
-          cd /tmp/cesium-deploy
-          
-          # Set Docker command
-          docker_cmd=\$(which docker || echo '/usr/local/bin/docker')
-          
-          # Login ke GitHub Container Registry
-          echo \"${GITHUB_TOKEN}\" | \$docker_cmd login ghcr.io -u \"${GITHUB_ACTOR}\" --password-stdin
-          
-          # Pull image terbaru
-          \$docker_cmd pull ghcr.io/${GITHUB_REPOSITORY}:latest
-          
-          # Jalankan container
-          \$docker_cmd run -d --name cesium-react-app --restart unless-stopped -p 5001:5001 ghcr.io/${GITHUB_REPOSITORY}:latest
-          
-          echo 'Deployment completed successfully'
+          chmod +x /tmp/deploy.sh
+          export GITHUB_TOKEN=\"${GITHUB_TOKEN}\"
+          export GITHUB_ACTOR=\"${GITHUB_ACTOR}\"
+          export GITHUB_REPOSITORY=\"${GITHUB_REPOSITORY}\"
+          export NAS_HOST=\"${NAS_HOST}\"
+          /tmp/deploy.sh
         "
