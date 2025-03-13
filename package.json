@@ -28,7 +28,8 @@
     "test": "craco test",
     "eject": "react-scripts eject",
     "server": "nodemon server.js",
-    "dev": "concurrently \"npm run server\" \"npm run start\""
+    "dev": "concurrently \"npm run server\" \"npm run start\"",
+    "deploy": "npm run build && docker-compose down && docker-compose up --build -d"
   },
   "eslintConfig": {
     "extends": [

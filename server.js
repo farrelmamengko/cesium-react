@@ -4,23 +4,80 @@ const cors = require('cors');
 const path = require('path');
 const multer = require('multer');
 const fs = require('fs');
+const axios = require('axios');
 
 // Inisialisasi Express
 const app = express();
-const PORT = process.env.PORT || 5004;
+const PORT = process.env.PORT || 5005;
+
+// Log environment variables untuk debugging
+console.log('Environment variables:');
+console.log('PORT:', process.env.PORT);
+console.log('MONGODB_URI:', process.env.MONGODB_URI);
+console.log('REACT_APP_API_URL:', process.env.REACT_APP_API_URL);
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: '*', // Izinkan semua origin
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization']
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Middleware untuk caching
+app.use((req, res, next) => {
+  // Aktifkan caching untuk file statis
+  if (req.url.match(/\.(jpg|jpeg|png|gif|ico|css|js|glb|gltf|b3dm|json)$/)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // Cache selama 24 jam
+  }
+  next();
+});
+
+// Endpoint proxy untuk Cesium Ion
+app.use('/proxy', async (req, res) => {
+  try {
+    const url = `https://api.cesium.com${req.url}`;
+    console.log(`Proxying request to: ${url}`);
+    
+    const response = await axios({
+      method: req.method,
+      url: url,
+      data: req.body,
+      headers: {
+        ...req.headers,
+        host: 'api.cesium.com'
+      },
+      responseType: 'arraybuffer'
+    });
+    
+    // Set headers
+    Object.keys(response.headers).forEach(key => {
+      res.setHeader(key, response.headers[key]);
+    });
+    
+    // Add caching headers
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    
+    // Send response
+    res.status(response.status).send(response.data);
+  } catch (error) {
+    console.error('Proxy error:', error.message);
+    res.status(500).send('Proxy error');
+  }
+});
+
 // Middleware untuk menyajikan file statis
 // Pastikan path uploads tersedia untuk akses publik
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  maxAge: 86400000 // Cache selama 24 jam (dalam ms)
+}));
 console.log('Serving static files from:', path.join(__dirname, 'uploads'));
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'build')));
+// Serve static files dengan caching
+app.use(express.static(path.join(__dirname, 'build'), {
+  maxAge: 86400000 // Cache selama 24 jam (dalam ms)
+}));
 
 // Middleware untuk logging request
 app.use((req, res, next) => {

@@ -18,7 +18,9 @@ import {
   ClockViewModel,
   SceneMode,
   defined,
-  HeadingPitchRange
+  HeadingPitchRange,
+  Resource,
+  DefaultProxy
 } from 'cesium';
 import TerrainMeasurement from './utils/TerrainMeasurement';
 import "cesium/Build/Cesium/Widgets/widgets.css";
@@ -38,8 +40,14 @@ import CameraVisualization from './components/CameraVisualization/CameraVisualiz
 import { saveCameraPosition, getCameraPosition, fetchOutcrops } from './services/api';
 import AddPhotoForm from './components/AddPhotoForm';
 
-// Set token Cesium Ion - Ganti dengan token Anda yang valid
+// Konfigurasi Cesium Ion
 Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIyOTI1ZDYyZC1mNWEwLTQ4ZjktYjYyZC1hMDU1ZDA0MmMwZTkiLCJpZCI6MTMwNiwiaWF0IjoxNTI3ODI0OTQwfQ.C8eb-HqnuV5pG4znVWc3rBSMtTmGsxt1wIKusHfboZU';
+
+// Nonaktifkan CORS untuk Cesium Ion
+const resource = new Resource({
+  url: 'https://api.cesium.com',
+  proxy: new DefaultProxy('/proxy/')
+});
 
 function App() {
   // Refs
@@ -104,10 +112,12 @@ function App() {
         // Gunakan requestAnimationFrame untuk menghindari blocking UI thread
         requestAnimationFrame(async () => {
           try {
-            // Buat terrain dengan opsi yang lebih ringan
+            // Gunakan resource untuk request
             const terrainProvider = await createWorldTerrainAsync({
-              requestVertexNormals: false, // Matikan vertex normals untuk performa lebih baik
-              requestWaterMask: false      // Matikan water mask untuk performa lebih baik
+              requestVertexNormals: false,
+              requestWaterMask: false,
+              requestMetadata: false,
+              url: resource
             });
             
             // Terapkan terrain provider ke scene

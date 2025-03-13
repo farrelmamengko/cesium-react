@@ -2,11 +2,11 @@ services:
   app:
     build: .
     ports:
-      - "5004:5004"
+      - "5005:5005"
     environment:
       - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
-      - PORT=5004
-      - REACT_APP_API_URL=http://203.153.109.226:5004
+      - PORT=5005
+      - REACT_APP_API_URL=http://203.153.109.226:5005
     volumes:
       - ./uploads:/app/uploads
       - ./build:/app/build
