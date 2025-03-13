@@ -22,6 +22,6 @@ docker exec cesium-react-app-1 curl -s mongodb:27017 || echo "Tidak dapat terhub
 
 # Periksa apakah aplikasi dapat diakses
 echo -e "\nMemeriksa apakah aplikasi dapat diakses:"
-curl -s -o /dev/null -w "%{http_code}" http://localhost:5005 || echo "Aplikasi tidak dapat diakses"
+curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 || echo "Aplikasi tidak dapat diakses"
 
 echo -e "\nPemeriksaan selesai!" 

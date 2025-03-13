@@ -8,7 +8,7 @@ chmod +x deploy-to-nas.sh
 
 # Variabel konfigurasi
 NAS_IP="203.153.109.226"
-NAS_PORT="5005"
+NAS_PORT="8080"
 NAS_USER="admin"  # Ganti dengan username NAS Anda
 NAS_DIR="/volume1/docker/cesium-react"
 

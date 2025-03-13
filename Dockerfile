@@ -21,7 +21,7 @@ RUN mkdir -p uploads/photos
 RUN mkdir -p terrain-cache
 
 # Expose port yang digunakan server
-EXPOSE 5005
+EXPOSE 8080
 
 # Command untuk menjalankan server
 CMD ["node", "server.js"] 

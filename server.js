@@ -8,7 +8,7 @@ const axios = require('axios');
 
 // Inisialisasi Express
 const app = express();
-const PORT = process.env.PORT || 5005;
+const PORT = process.env.PORT || 8080;
 
 // Log environment variables untuk debugging
 console.log('Environment variables:');
