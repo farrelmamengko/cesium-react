@@ -127,11 +127,11 @@ jobs:
           app:
             image: ghcr.io/${GITHUB_REPOSITORY}:latest
             ports:
-              - "8080:8080"
+              - "5004:5004"
             environment:
               - MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
-              - PORT=8080
-              - REACT_APP_API_URL=http://203.153.109.226:8080
+              - PORT=5004
+              - REACT_APP_API_URL=http://203.153.109.226:5004
             volumes:
               - ./uploads:/app/uploads
               - ./build:/app/build
@@ -170,8 +170,8 @@ jobs:
         # Buat file .env.production
         cat > .env.production << 'EOF'
         MONGODB_URI=mongodb://mongodb:27017/belajaroutcrop-db
-        PORT=8080
-        REACT_APP_API_URL=http://203.153.109.226:8080
+        PORT=5004
+        REACT_APP_API_URL=http://203.153.109.226:5004
         EOF
         
         echo "Created .env.production file"
@@ -209,10 +209,10 @@ jobs:
             --name cesium-react-app \
             --network cesium-network \
             --restart unless-stopped \
-            -p 8080:8080 \
+            -p 5004:5004 \
             -e MONGODB_URI="mongodb://cesium-react-mongodb:27017/belajaroutcrop-db" \
-            -e PORT="8080" \
-            -e REACT_APP_API_URL="http://${NAS_HOST}:8080" \
+            -e PORT="5004" \
+            -e REACT_APP_API_URL="http://${NAS_HOST}:5004" \
             -v "$(pwd)/uploads:/app/uploads" \
             -v "$(pwd)/build:/app/build" \
             -v "$(pwd)/terrain-cache:/app/terrain-cache" \
@@ -224,7 +224,7 @@ jobs:
         $docker_cmd image prune -f
         
         echo "Deployment completed successfully"
-        echo "Application should be available at http://${NAS_HOST}:8080"
+        echo "Application should be available at http://${NAS_HOST}:5004"
         EOL
         
         chmod +x deploy.sh
