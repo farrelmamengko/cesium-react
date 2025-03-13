@@ -243,17 +243,21 @@ jobs:
         echo "Attempting SSH connection..."
         sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'echo "SSH connection successful"'
         
+        # Buat direktori home jika belum ada
+        echo "Creating directory for deployment script..."
+        sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} 'mkdir -p $HOME/scripts'
+        
         # Upload script deployment ke NAS
         echo "Uploading deployment script to NAS..."
-        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:/tmp/deploy.sh
+        sshpass -e scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -P ${{ secrets.NAS_PORT }} deploy.sh ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }}:$HOME/scripts/deploy.sh
         
         # Jalankan script deployment di NAS
         echo "Running deployment script on NAS..."
         sshpass -e ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p ${{ secrets.NAS_PORT }} ${{ secrets.NAS_USERNAME }}@${{ secrets.NAS_HOST }} "
-          chmod +x /tmp/deploy.sh
+          chmod +x $HOME/scripts/deploy.sh
           export GITHUB_TOKEN=\"${GITHUB_TOKEN}\"
           export GITHUB_ACTOR=\"${GITHUB_ACTOR}\"
           export GITHUB_REPOSITORY=\"${GITHUB_REPOSITORY}\"
           export NAS_HOST=\"${NAS_HOST}\"
-          /tmp/deploy.sh
+          $HOME/scripts/deploy.sh
         "
